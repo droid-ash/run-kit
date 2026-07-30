@@ -8,6 +8,7 @@ import {
   comboParts,
   findConflicts,
   findMatch,
+  tiersCollide,
   formatCombo,
   keyLabel,
   matchesCombo,
@@ -21,6 +22,7 @@ import {
   type BindingHost,
   type ChordEvent,
   type EffectiveBinding,
+  type KeyBinding,
 } from "./keybindings";
 
 const SHELL_MAC: BindingHost = { platform: "mac", shell: true };
@@ -267,6 +269,27 @@ describe("scopesOverlap / findConflicts", () => {
   it("does not flag the board ⌘[/⌘] pair against the global shifted [/] pair", () => {
     expect(findConflicts(resolved())).toEqual([]);
   });
+
+  it("tiersCollide: cmd and ctrl collide (a plain Ctrl chord matches both); shifted is disjoint", () => {
+    expect(tiersCollide("cmd", "ctrl")).toBe(true);
+    expect(tiersCollide("ctrl", "cmd")).toBe(true);
+    expect(tiersCollide("cmd", "cmd")).toBe(true);
+    expect(tiersCollide("shifted", "cmd")).toBe(false);
+    expect(tiersCollide("shifted", "ctrl")).toBe(false);
+  });
+
+  it("flags a cmd-tier binding masking a ctrl-tier one on the same code", () => {
+    // A Ctrl chord captured on non-mac reads as `cmd`; on the same code it
+    // matches the same keydown as the `ctrl`-tier chat-toggle default.
+    const bindings = resolveBindings(
+      DEFAULT_BINDINGS,
+      { "sidebar-toggle": { code: "Backquote", tier: "cmd" } },
+      SHELL_OTHER,
+    );
+    const conflicts = findConflicts(bindings);
+    expect(conflicts).toHaveLength(1);
+    expect([conflicts[0].a, conflicts[0].b].sort()).toEqual(["chat-toggle", "sidebar-toggle"]);
+  });
 });
 
 describe("captureFromEvent", () => {
@@ -328,6 +351,22 @@ describe("applyCapture (steal-with-warning)", () => {
     expect(overrides).toEqual({
       "window-next": { code: "KeyA", tier: "shifted" },
       "agent-next-waiting": null,
+    });
+  });
+
+  it("steals across the colliding cmd/ctrl tiers on the same code", () => {
+    // sidebar-toggle (global) captures cmd+Backquote — the chord a non-mac
+    // Ctrl+` capture produces. It matches the same keydown as chat-toggle's
+    // ctrl-tier default, so chat-toggle must be flagged and unbound instead
+    // of silently masked at dispatch.
+    const { overrides, stolenFrom } = applyCapture(resolved(), {}, "sidebar-toggle", {
+      code: "Backquote",
+      tier: "cmd",
+    });
+    expect(stolenFrom).toBe("chat-toggle");
+    expect(overrides).toEqual({
+      "sidebar-toggle": { code: "Backquote", tier: "cmd" },
+      "chat-toggle": null,
     });
   });
 
@@ -452,5 +491,114 @@ describe("withShortcutHints", () => {
     const byAction = new Map(bindings.map((b) => [b.actionId, b]));
     const [entry] = withShortcutHints([{ id: "window-next", label: "x" }], byAction, platform);
     expect(entry.shortcut).toBe("Shift+Ctrl+U");
+  });
+});
+
+describe("keyless (macro) defaults — 260730-hbyh", () => {
+  // Macros enter resolution as ordinary defaults with `code: ""` (no shipped
+  // combo — see lib/macros.ts `macroToBinding`); their combo lives solely in
+  // the override diff map.
+  const MACRO: KeyBinding = {
+    actionId: "macro:discuss",
+    code: "",
+    tier: "shifted",
+    scope: "global",
+    kind: "macro",
+    label: "riff: discuss",
+  };
+  const withMacro = [...DEFAULT_BINDINGS, MACRO];
+
+  it("resolves unbound (disabled, reason 'user') without an override", () => {
+    const bindings = resolveBindings(withMacro, {}, SHELL_OTHER);
+    expect(byId(bindings, "macro:discuss")).toMatchObject({
+      enabled: false,
+      isDefault: false,
+      disabledReason: "user",
+    });
+    expect(findMatch(chord({ code: "KeyD", shiftKey: true, ctrlKey: true }), bindings)).toBeNull();
+  });
+
+  it("an override combo makes the macro live and matchable", () => {
+    const bindings = resolveBindings(
+      withMacro,
+      { "macro:discuss": { code: "KeyD", tier: "shifted" } },
+      SHELL_OTHER,
+    );
+    expect(byId(bindings, "macro:discuss")).toMatchObject({
+      code: "KeyD",
+      enabled: true,
+      isDefault: false,
+      kind: "macro",
+    });
+    expect(
+      findMatch(chord({ code: "KeyD", shiftKey: true, ctrlKey: true }), bindings)?.actionId,
+    ).toBe("macro:discuss");
+  });
+
+  it("a macro combo on a browser-reserved key resolves disabled", () => {
+    const bindings = resolveBindings(
+      withMacro,
+      { "macro:discuss": { code: "KeyN", tier: "shifted" } },
+      BROWSER_OTHER,
+    );
+    expect(byId(bindings, "macro:discuss")).toMatchObject({
+      enabled: false,
+      disabledReason: "reserved",
+    });
+  });
+
+  it("steals work in both directions between macros and builtins", () => {
+    // Builtin captures the macro's combo → macro unbound.
+    const macroOwns = { "macro:discuss": { code: "KeyD", tier: "shifted" as const } };
+    const stealByBuiltin = applyCapture(
+      resolveBindings(withMacro, macroOwns, SHELL_OTHER),
+      macroOwns,
+      "window-next",
+      { code: "KeyD", tier: "shifted" },
+      withMacro,
+    );
+    expect(stealByBuiltin.stolenFrom).toBe("macro:discuss");
+    expect(stealByBuiltin.overrides).toEqual({
+      "macro:discuss": null,
+      "window-next": { code: "KeyD", tier: "shifted" },
+    });
+
+    // Macro captures a builtin's default combo → builtin unbound.
+    const stealByMacro = applyCapture(
+      resolveBindings(withMacro, {}, SHELL_OTHER),
+      {},
+      "macro:discuss",
+      { code: "KeyL", tier: "shifted" },
+      withMacro,
+    );
+    expect(stealByMacro.stolenFrom).toBe("window-next");
+    expect(stealByMacro.overrides).toEqual({
+      "window-next": null,
+      "macro:discuss": { code: "KeyL", tier: "shifted" },
+    });
+  });
+
+  it("withShortcutHints decorates a bound macro and skips an unbound one", () => {
+    const bound = resolveBindings(
+      withMacro,
+      { "macro:discuss": { code: "KeyD", tier: "shifted" } },
+      SHELL_OTHER,
+    );
+    const byActionBound = new Map(bound.map((b) => [b.actionId, b]));
+    const [hinted] = withShortcutHints(
+      [{ id: "macro:discuss", label: "Macro: riff: discuss" }],
+      byActionBound,
+      "other",
+    );
+    expect(hinted.shortcut).toBe("Shift+Ctrl+D");
+
+    const unbound = resolveBindings(withMacro, {}, SHELL_OTHER);
+    const byActionUnbound = new Map(unbound.map((b) => [b.actionId, b]));
+    const [unhinted] = withShortcutHints(
+      [{ id: "macro:discuss", label: "Macro: riff: discuss" }],
+      byActionUnbound,
+      "other",
+    );
+    expect(unhinted.shortcut).toBeUndefined();
   });
 });

@@ -38,9 +38,10 @@ export type BindingTier = "shifted" | "cmd" | "ctrl";
  *  `sidebar` value is schema-reserved (no v1 binding uses it). */
 export type BindingScope = "global" | "terminal" | "board" | "sidebar";
 
-/** `builtin` only in this change; `"macro"` is the reserved schema slot for
- *  change 260730-hbyh (macro riff bindings) — no executor lands here. */
-export type BindingKind = "builtin";
+/** `builtin` = the shipped registry actions; `macro` = user-defined macro
+ *  bindings over riff presets / palette actions (260730-hbyh — model in
+ *  `lib/macros.ts`, executor in `app.tsx`). */
+export type BindingKind = "builtin" | "macro";
 
 /** Keycap rendering platform. `other` = Windows/Linux. */
 export type BindingPlatform = "mac" | "other";
@@ -279,6 +280,12 @@ export function writeStoredOverrides(overrides: BindingOverrides): void {
  * flagged in the overlay until rebound or reset). A shifted combo that is
  * browser-reserved in this host (N/T/W outside the shell) resolves disabled
  * (`reason: "reserved"`) — the action stays palette-reachable.
+ *
+ * KEYLESS defaults (`code: ""` — macro bindings, which ship no default combo;
+ * see `lib/macros.ts` `macroToBinding`) resolve UNBOUND unless an override
+ * supplies a combo: `enabled: false, disabledReason: "user"` — the same state
+ * a steal victim lands in, so the overlay's unbound affordance covers both.
+ * Builtins always carry a code and are unaffected.
  */
 export function resolveBindings(
   defaults: readonly KeyBinding[],
@@ -298,6 +305,9 @@ export function resolveBindings(
       return { ...def, enabled: false, isDefault: false, disabledReason: "user" as const };
     }
     const combo: BindingCombo = override ?? { code: def.code, tier: def.tier };
+    if (combo.code === "") {
+      return { ...def, enabled: false, isDefault: false, disabledReason: "user" as const };
+    }
     const isDefault = combo.code === def.code && combo.tier === def.tier;
     const isReserved = combo.tier === "shifted" && reserved.has(combo.code);
     return {
@@ -327,10 +337,23 @@ export type BindingConflict = {
 };
 
 /**
+ * Whether two tiers can fire on the same keydown (per `matchesCombo`): `cmd`
+ * accepts Meta OR Ctrl without Shift and `ctrl` accepts Ctrl-only without
+ * Shift, so a plain Ctrl chord matches BOTH — same-code `cmd`/`ctrl` bindings
+ * mask each other on every platform (and on non-mac hosts capture always
+ * reads Ctrl chords as `cmd`, so the pair is routine there). `shifted`
+ * requires Shift and is disjoint from both.
+ */
+export function tiersCollide(a: BindingTier, b: BindingTier): boolean {
+  return a === b || (a !== "shifted" && b !== "shifted");
+}
+
+/**
  * Pure conflict detection over an effective map: two ENABLED bindings conflict
- * when their tier+code are equal and their scopes overlap. Consumed by tests
- * asserting the defaults are clean (the capture UI's steal warning does its
- * own single-victim overlap check in `applyCapture`).
+ * when their codes are equal, their tiers collide (equal, or the overlapping
+ * `cmd`/`ctrl` pair — see `tiersCollide`), and their scopes overlap. Consumed
+ * by tests asserting the defaults are clean (the capture UI's steal warning
+ * does its own single-victim overlap check in `applyCapture`).
  */
 export function findConflicts(bindings: readonly EffectiveBinding[]): BindingConflict[] {
   const conflicts: BindingConflict[] = [];
@@ -340,7 +363,7 @@ export function findConflicts(bindings: readonly EffectiveBinding[]): BindingCon
     for (let j = i + 1; j < bindings.length; j++) {
       const b = bindings[j];
       if (!b.enabled) continue;
-      if (a.code === b.code && a.tier === b.tier && scopesOverlap(a.scope, b.scope)) {
+      if (a.code === b.code && tiersCollide(a.tier, b.tier) && scopesOverlap(a.scope, b.scope)) {
         conflicts.push({ a: a.actionId, b: b.actionId, code: a.code, tier: a.tier });
       }
     }
@@ -389,9 +412,12 @@ export function captureFromEvent(
 /**
  * Apply a captured combo to an action's override diff. Steal-with-warning:
  * when another ENABLED binding with an overlapping scope already owns the
- * combo, it becomes unbound (override `null`) and is reported as `stolenFrom`
- * so the overlay can flag it. Re-capturing an action's own default drops its
- * diff entry (the stored blob stays diffs-only).
+ * combo — same code and a COLLIDING tier (`tiersCollide`: a plain Ctrl chord
+ * matches both the `cmd` and `ctrl` tiers, so a cross-tier owner would be
+ * silently masked at dispatch) — it becomes unbound (override `null`) and is
+ * reported as `stolenFrom` so the overlay can flag it. Re-capturing an
+ * action's own default drops its diff entry (the stored blob stays
+ * diffs-only).
  */
 export function applyCapture(
   bindings: readonly EffectiveBinding[],
@@ -408,7 +434,7 @@ export function applyCapture(
         b.actionId !== actionId &&
         b.enabled &&
         b.code === combo.code &&
-        b.tier === combo.tier &&
+        tiersCollide(b.tier, combo.tier) &&
         scopesOverlap(scope, b.scope),
     ) ?? null;
   const next: BindingOverrides = { ...overrides };

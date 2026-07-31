@@ -1,0 +1,57 @@
+id: zeiy
+name: 260731-zeiy-consolidate-tmux-runner-core
+created: 2026-07-31T08:48:50Z
+created_by: Sahil Ahuja
+change_type: refactor
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: active
+plan:
+    generated: true
+    task_count: 7
+    acceptance_count: 14
+    acceptance_completed: 14
+confidence:
+    certain: 5
+    confident: 3
+    tentative: 0
+    unresolved: 0
+    score: 4.9
+    fuzzy: true
+    dimensions:
+        signal: 78.8
+        reversibility: 89.4
+        competence: 86.9
+        disambiguation: 80.6
+stage_metrics:
+    intake: {started_at: "2026-07-31T08:48:50Z", driver: fab-new, iterations: 1, completed_at: "2026-07-31T08:55:19Z"}
+    apply: {started_at: "2026-07-31T08:55:19Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-31T09:04:08Z"}
+    review: {started_at: "2026-07-31T09:04:08Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-31T09:14:30Z"}
+    hydrate: {started_at: "2026-07-31T09:14:30Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-31T09:19:11Z"}
+    ship: {started_at: "2026-07-31T09:19:11Z", driver: fab-fff, iterations: 1, completed_at: "2026-07-31T09:21:10Z"}
+    review-pr: {started_at: "2026-07-31T09:21:10Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/run-kit/pull/485
+change_type_source: explicit
+true_impact:
+    added: 621
+    deleted: 85
+    net: 536
+    excluding:
+        added: 230
+        deleted: 81
+        net: 149
+    tests:
+        added: 137
+        deleted: 0
+        net: 137
+    computed_at: "2026-07-31T09:21:10Z"
+    computed_at_stage: ship
+summary: Consolidated the tmux subprocess-runner idiom into exported internal/tmux Run/RunOutput/RunOpts; internal/daemon, internal/riff, and cmd/rk now delegate, with socket targeting and timeouts left per-site
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-07-31T09:21:10Z

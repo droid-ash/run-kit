@@ -1,0 +1,3 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-08-01T11:54:46Z"}
+{"args":"frontend: tooltip kbd chips — compose-toggle chord on Compose Tip via keybinding registry, platform-aware palette kbd, add settings-open binding + Settings gear Tip kbd","cmd":"fab-new","event":"command","ts":"2026-08-01T11:54:46Z"}
+{"delta":"+4.7","event":"confidence","score":4.7,"trigger":"calc-score","ts":"2026-08-01T11:55:41Z"}

@@ -4,6 +4,8 @@ import {
   offset,
   flip,
   shift,
+  arrow,
+  FloatingArrow,
   useHover,
   useFocus,
   useDismiss,
@@ -184,6 +186,14 @@ function RowFlyoutContent({ win }: { win: WindowInfo }) {
   const agentLine = getAgentLine(win);
   const fabLine = getFabLine(win);
   const prSegments = getPrSegments(win);
+  // Single-sourced segment JSX shared by the anchor and plain branches below
+  // (the panel's segmentSpans idiom — the two renderings can't drift).
+  const segmentSpans = prSegments?.map((seg, i) => (
+    <span key={seg.text}>
+      {i > 0 && <span className="text-text-secondary">{" · "}</span>}
+      <span className={seg.color}>{seg.text}</span>
+    </span>
+  ));
   const fetchedAtEpoch = prFetchedAtEpoch(win);
 
   return (
@@ -206,9 +216,11 @@ function RowFlyoutContent({ win }: { win: WindowInfo }) {
         </a>
       </div>
       {/* The four orthogonal signal registers (status-pyramid.md), promoted
-          from the PANE panel via the shared resolvers. Read-only text — the
-          panel keeps its icons + copy interactions; the card is glance-only.
-          The tip's former standalone `agent:` line is subsumed by `agt`. */}
+          from the PANE panel via the shared resolvers. Read-only text except
+          the `pr` register, which is open-first (the line is a real anchor)
+          exactly like the panel's PrLinkRow — the register is open-first
+          everywhere it renders. The tip's former standalone `agent:` line is
+          subsumed by `agt`. */}
       <RegisterLine prefix="out " testid="row-flyout-out">
         <span className="text-text-secondary">{outputLine}</span>
       </RegisterLine>
@@ -222,40 +234,52 @@ function RowFlyoutContent({ win }: { win: WindowInfo }) {
           <span className="text-text-primary">{fabLine}</span>
         </RegisterLine>
       )}
-      {prSegments && (
-        // "pr" + 2 NBSPs = the same 4-advance prefix column as `out `/`agt `/
-        // `fab ` (and status-panel.tsx's pr rows). Escape sequences, never
-        // literal NBSPs - a literal survives careless re-encoding badly (the
-        // cycle-1 mojibake). Codepoints pinned by a unit test.
-        <RegisterLine prefix={"pr\u00a0\u00a0"} testid="row-flyout-pr">
-          {prSegments.map((seg, i) => (
-            <span key={seg.text}>
-              {i > 0 && <span className="text-text-secondary">{" · "}</span>}
-              <span className={seg.color}>{seg.text}</span>
-            </span>
-          ))}
-        </RegisterLine>
-      )}
-      {/* Ambient "PR checked Xs ago" trust signal; omitted without a joined
-          PR-status timestamp. Leaf-scoped clock inside the open card. */}
-      <FreshnessLine fetchedAtEpoch={fetchedAtEpoch} />
-      {/* Open-first PR affordance — the rest glyph is informational (it swaps
-          away under the pointer), so THIS anchor is the click path. Anchor,
-          not button (native middle/Ctrl+click); stopPropagation so opening
-          the PR never selects the underlying row. `prUrl` and `prNumber` are
-          independently optional — omit `#N` rather than render "#undefined". */}
-      {win.prUrl && (
+      {/* `pr` register — open-first when a URL exists (the panel's PrLinkRow
+          idiom): the WHOLE line is a real anchor (native middle/Ctrl+click,
+          right-click → copy link) with an always-visible inline `↗` sitting
+          shrink-0 after the truncating segment span, so it hugs the text end
+          and is never eaten by truncation. stopPropagation so opening the PR
+          never selects the underlying row. Without a URL the line stays plain
+          read-only text (`prUrl`/`prNumber` are independently optional — a
+          URL-less number gets the plain line, a number-less URL a bare
+          "open PR" anchor).
+          Prefix: "pr" + 2 NBSPs = the same 4-advance column as `out `/`agt `/
+          `fab ` (and status-panel.tsx's pr rows). Escape sequences, never
+          literal NBSPs - a literal survives careless re-encoding badly (the
+          cycle-1 mojibake). Codepoints pinned by a unit test. */}
+      {win.prUrl ? (
         <a
           href={win.prUrl}
           target="_blank"
           rel="noopener noreferrer"
+          title={win.prUrl}
+          aria-label={win.prNumber ? `Open PR #${win.prNumber} in a new tab` : "Open PR in a new tab"}
           onClick={(e) => e.stopPropagation()}
-          className="text-text-secondary hover:text-text-primary hover:underline whitespace-nowrap coarse:py-1"
+          className="group/pr flex items-center min-w-0 hover:bg-bg-inset focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent coarse:py-1"
           data-testid="row-flyout-pr-link"
         >
-          {win.prNumber ? `Open PR #${win.prNumber} ↗` : "Open PR ↗"}
+          <span className="text-text-secondary shrink-0">{"pr\u00a0\u00a0"}</span>
+          {segmentSpans ? (
+            <span data-testid="row-flyout-pr" className="min-w-0 truncate">
+              {segmentSpans}
+            </span>
+          ) : (
+            <span className="min-w-0 truncate text-text-secondary">open PR</span>
+          )}
+          {/* NBSP inside the span — the anchor is a flex container, so a
+              whitespace-only text node between flex items would be dropped. */}
+          <span className="shrink-0 text-text-secondary group-hover/pr:text-text-primary">{"\u00a0↗"}</span>
         </a>
+      ) : (
+        segmentSpans && (
+          <RegisterLine prefix={"pr\u00a0\u00a0"} testid="row-flyout-pr">
+            {segmentSpans}
+          </RegisterLine>
+        )
       )}
+      {/* Ambient "PR checked Xs ago" trust signal; omitted without a joined
+          PR-status timestamp. Leaf-scoped clock inside the open card. */}
+      <FreshnessLine fetchedAtEpoch={fetchedAtEpoch} />
     </>
   );
 }
@@ -275,6 +299,10 @@ type RowFlyout = {
   referenceProps: Record<string, unknown>;
   /** The portalled card, or null while closed. Render inside the row. */
   card: ReactNode;
+  /** True while the card is open. The row reads this to HOLD its hover tint
+   *  while the pointer travels onto the card (the held-row continuity cue) —
+   *  the state is row-local, so the open/close re-render never leaves the row. */
+  open: boolean;
   /** Imperative open — the coarse-pointer dot-tap trigger. */
   openNow: () => void;
   /** Imperative close — the row calls this on drag start. */
@@ -308,10 +336,20 @@ export function useRowFlyout(win: WindowInfo, { suppressed = false }: UseRowFlyo
     selfRef.current = { close: () => setOpen(false) };
   }
 
+  // True when this open was COLD (no card open, warm window expired) — gates
+  // the slide-out entrance so warm retargets between rows snap instead of
+  // re-animating on every sweep. Captured at the closed→open transition, BEFORE
+  // the coordinator update makes the module state warm.
+  const coldOpenRef = useRef(false);
+
   const handleOpenChange = useCallback((next: boolean) => {
     const self = selfRef.current;
     if (!self) return;
     if (next) {
+      // `useFocus` re-fires onOpenChange(true) for focusin bubbling from the
+      // card, so only a transition where this card was NOT already the active
+      // one counts as a fresh open for the entrance animation.
+      if (activeFlyout !== self) coldOpenRef.current = !flyoutIsWarm();
       // Single-open: opening this card closes any other open card (the
       // FloatingDelayGroup "currentId" behavior, module-scoped).
       if (activeFlyout && activeFlyout !== self) activeFlyout.close();
@@ -353,6 +391,12 @@ export function useRowFlyout(win: WindowInfo, { suppressed = false }: UseRowFlyo
     };
   }, []);
 
+  // Row-aligned notch (E1): the arrow middleware pins a pointer on the card's
+  // row-side edge at the ROW's vertical center — the geometric "whose card is
+  // this" cue. `shift()` may slide the card along the cross axis at viewport
+  // edges; the arrow stays locked to the reference either way.
+  const arrowRef = useRef<SVGSVGElement | null>(null);
+
   const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: handleOpenChange,
@@ -367,7 +411,9 @@ export function useRowFlyout(win: WindowInfo, { suppressed = false }: UseRowFlyo
     // off-viewport edge clips instead of widening the page; flip()/shift()
     // keep positioning against the viewport as before.
     strategy: "fixed",
-    middleware: [offset(6), flip(), shift({ padding: 8 })],
+    // arrow() runs after shift() so the notch is positioned against the final
+    // shifted card rect (the floating-ui documented order).
+    middleware: [offset(6), flip(), shift({ padding: 8 }), arrow({ element: arrowRef })],
     whileElementsMounted: autoUpdate,
   });
 
@@ -428,8 +474,29 @@ export function useRowFlyout(win: WindowInfo, { suppressed = false }: UseRowFlyo
           // any focusable descendant, i.e. the PR/docs links).
           onFocusCapture={() => setFocusInsideCard(true)}
           data-testid="row-flyout-card"
-          className="z-50 flex flex-col gap-1 bg-bg-primary border border-border rounded-md shadow-lg px-2 py-1.5 text-xs font-mono w-max max-w-xs"
+          // `rk-flyout-in` (cold opens only — warm retargets snap) slides the
+          // card out of the row via margin-left + opacity: floating-ui owns
+          // this element's `transform` for positioning, so the entrance must
+          // never animate transform (it would clobber the translate).
+          className={`z-50 flex flex-col gap-1 bg-bg-primary border border-border rounded-md shadow-lg px-2 py-1.5 text-xs font-mono w-max max-w-xs${
+            coldOpenRef.current ? " rk-flyout-in" : ""
+          }`}
         >
+          {/* Row-aligned notch (E1): pinned by the arrow() middleware to the
+              hovered row's vertical center on the card's row-side edge —
+              fill/stroke match the card surface so it reads as one shape. */}
+          <FloatingArrow
+            ref={arrowRef}
+            context={context}
+            width={10}
+            height={5}
+            tipRadius={1}
+            fill="var(--color-bg-primary)"
+            stroke="var(--color-border)"
+            strokeWidth={1}
+            aria-hidden="true"
+            data-testid="row-flyout-arrow"
+          />
           <RowFlyoutContent win={win} />
         </div>
       </FloatingFocusManager>
@@ -440,6 +507,7 @@ export function useRowFlyout(win: WindowInfo, { suppressed = false }: UseRowFlyo
     setReference: refs.setReference,
     referenceProps: getReferenceProps(),
     card,
+    open,
     openNow,
     close,
   } satisfies RowFlyout;

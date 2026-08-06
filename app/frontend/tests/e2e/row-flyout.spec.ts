@@ -128,11 +128,23 @@ test.describe("Row flyout card (fine pointer)", () => {
     );
     await expect(page.getByTestId("row-flyout-pr")).toContainText("#386");
     await expect(page.getByTestId("row-flyout-checked")).toContainText(/checked \d+\w+ ago/);
+    // The pr register LINE itself is the open-first anchor (PrLinkRow idiom):
+    // it wraps the segments and carries an always-visible inline ↗.
     const prLink = page.getByTestId("row-flyout-pr-link");
-    await expect(prLink).toHaveText("Open PR #386 ↗");
+    await expect(prLink).toContainText("#386");
+    await expect(prLink).toContainText("↗");
+    await expect(prLink).toHaveAttribute("aria-label", "Open PR #386 in a new tab");
     await expect(prLink).toHaveAttribute("href", "https://github.com/o/r/pull/386");
     await expect(prLink).toHaveAttribute("target", "_blank");
     await expect(prLink).toHaveAttribute("rel", "noopener noreferrer");
+    // Row-aligned notch (E1): the arrow renders on the card's row-side edge,
+    // vertically inside the hovered row's band (its center ≈ the row's center).
+    const arrowBox = await page.getByTestId("row-flyout-arrow").boundingBox();
+    const anchorRowBox = await prRow(page).boundingBox();
+    expect(arrowBox).not.toBeNull();
+    const arrowCenterY = arrowBox!.y + arrowBox!.height / 2;
+    expect(arrowCenterY).toBeGreaterThanOrEqual(anchorRowBox!.y - 1);
+    expect(arrowCenterY).toBeLessThanOrEqual(anchorRowBox!.y + anchorRowBox!.height + 1);
     const docsLink = page.getByTestId("row-flyout-docs-link");
     await expect(docsLink).toBeVisible();
     await expect(docsLink).toHaveAttribute(

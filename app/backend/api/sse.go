@@ -1118,16 +1118,18 @@ func previewSubsetFor(c *sseClient, full map[string]string, byWindow map[string]
 // canonical PR URL, never by bare PR number — numbers are only unique per repo,
 // so a number join can pick up an unrelated repo's PR state.
 //
-// PrChecks/PrReview/PrIsDraft are collector-only, so they are always reset first
-// and re-attached solely on a snapshot hit. PrState is DUAL-SOURCED: the
-// viewer-wide collector is authoritative on a URL-hit, but enrichWindowPR has
-// already seeded a branch-derived fallback (MapBranchState) into PrState, so a
-// collector MISS must PRESERVE that fallback rather than wipe it to "" — a
-// branch-derived closed PR outside the viewer's top-$limit window would
-// otherwise carry prNumber set + prState "" and prOwnsDot would paint a dead
-// PR's dot solid. The fallback is refreshed by enrichWindowPR every FetchSessions
-// (500ms cache TTL), so preserving it on a cache-hit re-run of this idempotent
-// pass cannot strand a stale value for longer than one cache generation.
+// PrChecks/PrReview are collector-only, so they are always reset first and
+// re-attached solely on a snapshot hit. PrState and PrIsDraft are DUAL-SOURCED:
+// the viewer-wide collector is authoritative on a URL-hit, but enrichWindowPR has
+// already seeded branch-derived values into both, so a collector MISS must
+// PRESERVE them rather than wipe them — a branch-derived closed PR outside the
+// viewer's top-$limit window would otherwise carry prNumber set + prState "" and
+// prOwnsDot would paint a dead PR's dot solid, and a teammate's draft (never in
+// `viewer { pullRequests }` at all, whatever the limit) would lose its draft flag
+// and render as a plain open PR. Both fallbacks are refreshed by enrichWindowPR
+// every FetchSessions (500ms cache TTL), so preserving them on a cache-hit re-run
+// of this idempotent pass cannot strand a stale value for longer than one cache
+// generation.
 //
 // No-op when no collector is wired (nil prStatus) — degrades gracefully.
 func (h *sseHub) attachPRStatus(sess []sessions.ProjectSession) {
@@ -1140,12 +1142,15 @@ func (h *sseHub) attachPRStatus(sess []sessions.ProjectSession) {
 		for wi := range windows {
 			w := &windows[wi]
 			// Reset collector-only fields so stale values never linger. PrState
-			// is left intact: it holds enrichWindowPR's branch fallback and is
-			// overridden below only on a collector hit. PrFetchedAt is
-			// collector-join-owned like PrChecks/PrReview/PrIsDraft, so it resets
-			// to nil here and is re-attached solely on a snapshot hit — a URL-miss
+			// and PrIsDraft are left intact: they hold enrichWindowPR's branch
+			// fallbacks and are overridden below only on a collector hit
+			// (PrIsDraft must survive a MISS, or a draft authored by anyone but
+			// the viewer — which the collector's `viewer { pullRequests }` query
+			// can never return — is wiped back to false). PrFetchedAt is
+			// collector-join-owned like PrChecks/PrReview, so it resets to nil
+			// here and is re-attached solely on a snapshot hit — a URL-miss
 			// window carries no stale freshness timestamp.
-			w.PrChecks, w.PrReview, w.PrIsDraft, w.PrFetchedAt = "", "", false, nil
+			w.PrChecks, w.PrReview, w.PrFetchedAt = "", "", nil
 			if w.PrURL == nil || *w.PrURL == "" {
 				continue
 			}

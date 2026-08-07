@@ -240,15 +240,34 @@ export function prOwnsDot(win: WindowInfo): boolean {
 
 /**
  * Color token for the window row's rest-state PR glyph (93dy), reusing the
- * shared PR vocabulary so the glyph stays in lock-step with the segments:
- * red only for a fail-ish PR (`prDotState` → `fail`, i.e. `isFailish`), then
- * GitHub-style by state — green for open (checks pending included), purple for
- * merged. Closed never reaches here (the `prOwnsDot` gate excludes it). No new
- * color system — `text-accent-green`/`text-purple-400`/`text-red-400` are the
- * established tokens (PR_STATE_COLORS).
+ * shared PR vocabulary so the glyph stays in lock-step with the segments.
+ * FOUR-WAY mapping, and the branch order IS the design:
+ *   1. `text-red-400` for a fail-ish PR (`prDotState` → `fail`, i.e.
+ *      `isFailish`). FAIL STAYS ON TOP — a draft whose checks fail (or that has
+ *      changes requested) is a problem first and a draft second, the same
+ *      `isFailish`-dominates rule `prDotState` encodes by ordering `fail` ahead
+ *      of `healthy`.
+ *   2. `text-text-secondary` for an OPEN DRAFT (e30p) — GitHub renders drafts
+ *      gray, and this is already the "inert / no journey" token in this model
+ *      (it is `PHASE_HUE.none` and the color the `skipped` shape forces in
+ *      status-dot.tsx). The branch is GATED ON `prState === "open"` on purpose:
+ *      a merged/closed PR is never draft in practice (GitHub un-drafts on
+ *      merge), and the gate makes the merged→purple and closed→no-glyph paths
+ *      untouched BY CONSTRUCTION rather than incidentally. So draft displaces
+ *      exactly one case — open-green — including when checks are still pending.
+ *   3. `text-accent-green` for open (checks pending included).
+ *   4. `text-purple-400` for merged.
+ * Closed never reaches here (the `prOwnsDot` gate excludes it). No new color
+ * system — all four are established tokens (PR_STATE_COLORS /
+ * `--color-text-secondary`).
+ *
+ * NOTE: this is the GLYPH axis only. The status dot deliberately disagrees —
+ * its hue encodes the phase/family and a passing draft stays `healthy` there
+ * ("GREEN MEANS HEALTH, NOT MERGE-READINESS"); draft is a glyph-only distinction.
  */
 export function prGlyphColor(win: WindowInfo): string {
   if (prDotState(win) === "fail") return "text-red-400";
+  if (win.prState === "open" && win.prIsDraft) return "text-text-secondary";
   return win.prState === "open" ? "text-accent-green" : "text-purple-400";
 }
 

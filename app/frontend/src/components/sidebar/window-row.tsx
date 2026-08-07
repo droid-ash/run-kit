@@ -565,7 +565,9 @@ function WindowRowInner({
             are always visible there), and while keyboard focus is inside the
             action cluster — so it can never be a click target or occlude the
             revealed ✕. Color via the shared PR vocabulary (prGlyphColor):
-            green open, purple merged, red failing. */}
+            red failing, gray open-draft, green open, purple merged — draft is
+            open-gated and sits BELOW fail, and it is a glyph-only distinction
+            (the dot stays family-hued; see pr-status-model.ts). */}
         {!ghost && prOwnsDot(win) && (
           <span
             aria-hidden="true"

@@ -1299,10 +1299,14 @@ func (h *sseHub) poll() {
 			// network-free here). NOTE: `result` and `h.cache[server].data` are the SAME
 			// slice (stored by reference above), so this mutates the cached
 			// snapshot in place — that is intentional and safe because
-			// attachPRStatus is idempotent: it resets all four PR fields to
-			// zero before re-attaching, so re-running it on a cache hit yields
-			// the same result and a PR that left the collector snapshot clears
-			// cleanly. Re-deriving every tick keeps the cached sessions in sync
+			// attachPRStatus is idempotent: it resets the three collector-only
+			// fields (PrChecks/PrReview/PrFetchedAt) to zero before re-attaching,
+			// so re-running it on a cache hit yields the same result and a PR that
+			// left the collector snapshot clears those cleanly. The dual-sourced
+			// PrState/PrIsDraft are deliberately NOT reset, so on a cache hit they
+			// keep whatever the previous tick left — bounded by one cache
+			// generation (500ms), after which FetchSessions re-seeds both from the
+			// branch channel. Re-deriving every tick keeps the cached sessions in sync
 			// with the latest PR snapshot without a deep copy.
 			h.attachPRStatus(result)
 

@@ -587,8 +587,9 @@ func windowBranchRepo(w *tmux.WindowInfo) (repoDir, branch string) {
 // AUTHENTICATED USER'S OWN PRs. A draft opened by a teammate is resolved by this
 // branch channel (author-agnostic) but MISSES the URL join, so without this seed
 // its prIsDraft stays false and the row glyph renders as a non-draft. The
-// collector still overrides on a hit; the two cannot disagree, as both read
-// GitHub.
+// collector still overrides on a hit, and since it polls at 90s against this
+// channel's 30s it can serve a briefly stale flag — accepted, and exactly how
+// PrState already behaves.
 func enrichWindowPR(w *tmux.WindowInfo) {
 	repoDir, branch := windowBranchRepo(w)
 	if branch == "" {

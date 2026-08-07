@@ -139,8 +139,13 @@ type BranchPR struct {
 	// authored by anyone else never hits the URL join and would silently render
 	// as a non-draft. The branch channel is author-agnostic, so it is the only
 	// source that covers a teammate's draft. Dual-sourced like State: the
-	// collector still overrides on a URL hit (both ultimately read GitHub, so
-	// they cannot disagree in practice).
+	// collector still overrides on a URL hit. The two channels CAN disagree
+	// transiently — this refresher ticks every branchPRRefreshInterval (30s), the
+	// collector every api.prStatusPollInterval (90s) — and on a hit the STALER
+	// collector wins, so a draft just marked ready-for-review can read as a draft
+	// for up to one collector generation. That precedence is deliberate: it leaves
+	// the self-authored case (which the collector already covered) behaving
+	// exactly as before.
 	IsDraft bool `json:"isDraft"`
 }
 

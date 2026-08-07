@@ -29,6 +29,26 @@ export function updateChipToolSummary(tools: UpdateActionTool[]): string {
     .join(", ");
 }
 
+/**
+ * Compose the composite dismissal key over a tool set: sorted `tool@latest`
+ * pairs, comma-joined — a verbatim client-side mirror of the backend's
+ * `computeKey` (`app/backend/internal/updatecheck/updatecheck.go`), which
+ * composes the `key` the ambient `update-available` payload carries. The MANUAL
+ * check feed has no server-computed key of its own (the github source is a
+ * side channel the daemon deliberately never caches), so the manual-fed chip
+ * derives its key here — which is what lets the existing `runkit-update-dismissed`
+ * localStorage dismissal machinery work unchanged against it (§ Update
+ * Notification). An empty set composes `""` (the cleared-key sentinel the
+ * dismissal path already no-ops on). Context-free, so it stays unit-testable
+ * alongside the other pure builders in this module.
+ */
+export function computeUpdateKey(tools: { tool: string; latest: string }[]): string {
+  return tools
+    .map((t) => `${t.tool}@${t.latest}`)
+    .sort()
+    .join(",");
+}
+
 export type UpdatePaletteAction = {
   id: string;
   label: string;
@@ -74,6 +94,25 @@ export type CheckVerdictTool = UpdateActionTool & {
 export type CheckToast = { message: string; updatable: boolean };
 
 /**
+ * The "relevant" (updatable) subset a check reports for the given view — the
+ * SINGLE predicate behind both the check-result toast and the persisted manual
+ * feed: incl.-patches ⇒ every pending update (`updateAvailable`); default ⇒ only
+ * rows also crossing the notify threshold (`updateAvailable && notable`).
+ * Consumed by `composeCheckToast` here and by `useUpdateCheck`'s
+ * `applyManualCheckResult` persistence, so the chip can never contradict the
+ * toast about what a check found — a change to the filter moves both at once.
+ * Generic over the row type (structurally `CheckVerdictTool`) so a caller's
+ * richer element type — e.g. the client's `UpdateCheckTool` — survives the
+ * filter instead of widening.
+ */
+export function filterCheckRelevantTools<T extends CheckVerdictTool>(
+  tools: T[],
+  includePatches: boolean,
+): T[] {
+  return tools.filter((t) => (includePatches ? t.updateAvailable : t.updateAvailable && t.notable));
+}
+
+/**
  * Compose the check-result toast for the two palette check commands over the
  * verdict list (the minor/patch distinction is client-side filtering):
  *   - default view (`includePatches` false): tools where `notable` is true,
@@ -94,9 +133,7 @@ export function composeCheckToast(
   includePatches: boolean,
   source = "",
 ): CheckToast {
-  const relevant = tools.filter((t) =>
-    includePatches ? t.updateAvailable : t.updateAvailable && t.notable,
-  );
+  const relevant = filterCheckRelevantTools(tools, includePatches);
   if (relevant.length === 0) return { message: "All tools up to date", updatable: false };
   const annotationSuppressed = source === "github";
   const message = relevant

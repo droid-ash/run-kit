@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from "react";
-import { useUpdateNotification } from "@/contexts/session-context";
+import { useCallback, useContext, useRef, useState } from "react";
+import { SessionContext, useUpdateNotification } from "@/contexts/session-context";
 import { useToast } from "@/components/toast";
 import { checkForUpdates } from "@/api/client";
-import { composeCheckToast } from "@/lib/palette-update";
+import { composeCheckToast, filterCheckRelevantTools } from "@/lib/palette-update";
 
 /** Sentinel running version for local (non-ldflags) builds — the toast's
  *  "Update Now" action slot is suppressed for it (mirrors the palette entry's
@@ -36,6 +36,16 @@ const DEV_VERSION = "dev";
  *     surfaces the server's message — a deliberate invocation deserves an
  *     honest answer, unlike the fail-silent ambient loop.
  *
+ * The result is ALSO persisted onto the tab-local manual feed
+ * (`applyManualCheckResult`), so the finding survives the toast on the
+ * persistent update surfaces (chip / overflow-menu version row) instead of
+ * evaporating after ~5s. The persisted subset comes from the SAME exported
+ * predicate `composeCheckToast` filters with (`filterCheckRelevantTools` in
+ * lib/palette-update.ts — one definition, two call sites), so the chip and the
+ * toast can never disagree about what was found — and an all-up-to-date result
+ * persists an EMPTY set, clearing any stale positive. The toast flow itself is
+ * unchanged: this is in addition to it, never a replacement.
+ *
  * In-flight state (260720-ml7k): `checking` is true while a check request is
  * pending — the overflow menu's ⟳ affordance renders its spinner/disabled form
  * off it. Repeat `runUpdateCheck` calls while in flight are no-ops
@@ -49,6 +59,11 @@ export function useUpdateCheck(): {
   checking: boolean;
 } {
   const { brew, daemonVersion, forceUpdateNow } = useUpdateNotification();
+  // Read the persistence seam from the context DIRECTLY (provider-tolerant, the
+  // same `useContext` idiom useUpdateNotification uses) so this hook never
+  // throws in an isolated test mount without a SessionProvider.
+  const ctx = useContext(SessionContext);
+  const applyManualCheckResult = ctx?.applyManualCheckResult;
   const { addToast } = useToast();
   const [checking, setChecking] = useState(false);
   const checkingRef = useRef(false);
@@ -63,6 +78,15 @@ export function useUpdateCheck(): {
           const { message, updatable } = composeCheckToast(
             result.tools,
             includePatches,
+            result.source,
+          );
+          // Persist the same updatable subset onto the tab-local manual feed
+          // (an empty subset clears a stale positive — see applyManualCheckResult).
+          // The subset comes from the SAME exported predicate composeCheckToast
+          // filters with (filterCheckRelevantTools), so the persisted feed can
+          // never desync from what the toast just reported.
+          applyManualCheckResult?.(
+            filterCheckRelevantTools(result.tools, includePatches),
             result.source,
           );
           const canUpdate = brew && daemonVersion !== DEV_VERSION;
@@ -87,7 +111,7 @@ export function useUpdateCheck(): {
           setChecking(false);
         });
     },
-    [brew, daemonVersion, forceUpdateNow, addToast],
+    [brew, daemonVersion, forceUpdateNow, addToast, applyManualCheckResult],
   );
 
   return { runUpdateCheck, checking };

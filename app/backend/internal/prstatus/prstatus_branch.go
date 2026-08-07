@@ -118,8 +118,8 @@ const (
 	branchPRWakeDebounce = 1 * time.Second
 )
 
-// BranchPR is the derived PR for a (repo, branch) pair. It carries only the
-// fields needed to populate WindowInfo.PrURL/PrNumber, to rank candidates by
+// BranchPR is the derived PR for a (repo, branch) pair. It carries the fields
+// needed to populate WindowInfo.PrURL/PrNumber/PrIsDraft, to rank candidates by
 // precedence, and to key the live-status join; the richer checks/review come
 // from the viewer-wide collector.
 type BranchPR struct {
@@ -133,6 +133,15 @@ type BranchPR struct {
 	// UpdatedAt breaks ties WITHIN a state class — the most-recently-updated PR of
 	// the winning class is chosen; it is not surfaced further.
 	UpdatedAt time.Time `json:"updatedAt"`
+	// IsDraft seeds WindowInfo.PrIsDraft. It lives on the BRANCH channel, not
+	// only the viewer-wide collector, because that collector queries
+	// `viewer { pullRequests }` — the authenticated user's OWN PRs — so a draft
+	// authored by anyone else never hits the URL join and would silently render
+	// as a non-draft. The branch channel is author-agnostic, so it is the only
+	// source that covers a teammate's draft. Dual-sourced like State: the
+	// collector still overrides on a URL hit (both ultimately read GitHub, so
+	// they cannot disagree in practice).
+	IsDraft bool `json:"isDraft"`
 }
 
 // branchPRExec runs `gh pr list --head <branch> --state all` in repoDir and
@@ -144,9 +153,11 @@ type BranchPR struct {
 // derived so its purple/orange DONE-square survives statelessly, restart-proof —
 // there is no grace clock to remember it (status-pyramid.md D2, revised). The
 // `state` field is requested so pickBranchPR can rank by precedence
-// (open > merged > closed). An explicit `--limit 100` overrides gh's default of
-// 30, which `--state all` could otherwise exceed on a much-reused head and
-// truncate the winning PR out of the result page.
+// (open > merged > closed), and `isDraft` so a draft authored by someone other
+// than the viewer still reaches WindowInfo (the viewer-wide collector only sees
+// the authenticated user's own PRs). An explicit `--limit 100` overrides gh's
+// default of 30, which `--state all` could otherwise exceed on a much-reused
+// head and truncate the winning PR out of the result page.
 var branchPRExec = func(ctx context.Context, repoDir, branch string) ([]byte, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, ghTimeout)
 	defer cancel()
@@ -159,7 +170,7 @@ var branchPRExec = func(ctx context.Context, repoDir, branch string) ([]byte, er
 		// explicit cap keeps pickBranchPR's precedence ranking correct without
 		// unbounded output — a single head realistically never has this many PRs.
 		"--limit", "100",
-		"--json", "number,url,state,updatedAt",
+		"--json", "number,url,state,updatedAt,isDraft",
 	)
 	cmd.Dir = repoDir
 	return cmd.Output()

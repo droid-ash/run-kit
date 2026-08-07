@@ -116,10 +116,10 @@ func TestAttachPRStatusNilCollectorNoop(t *testing.T) {
 
 func TestAttachPRStatusResetsCollectorFields(t *testing.T) {
 	// A window whose PR dropped from the collector snapshot has its COLLECTOR-only
-	// fields (checks/review/draft) cleared. PrState is dual-sourced — it also
-	// carries enrichWindowPR's branch fallback — so attachPRStatus preserves it on
-	// a collector MISS rather than wiping it; clearing a genuinely gone PR's state
-	// is the branch fallback's job on the next FetchSessions (500ms cache TTL).
+	// fields (checks/review) cleared. PrState and PrIsDraft are dual-sourced — they
+	// also carry enrichWindowPR's branch fallback — so attachPRStatus preserves them
+	// on a collector MISS rather than wiping them; clearing a genuinely gone PR's
+	// state is the branch fallback's job on the next FetchSessions (500ms cache TTL).
 	hub := &sseHub{prStatus: stubSnapshotter{snap: map[string]prstatus.PRStatus{}}}
 	sess := []sessions.ProjectSession{{
 		Windows: []tmux.WindowInfo{
@@ -128,7 +128,7 @@ func TestAttachPRStatusResetsCollectorFields(t *testing.T) {
 	}}
 	hub.attachPRStatus(sess)
 	w := sess[0].Windows[0]
-	if w.PrChecks != "" || w.PrReview != "" || w.PrIsDraft {
+	if w.PrChecks != "" || w.PrReview != "" {
 		t.Errorf("stale collector fields not reset: %+v", w)
 	}
 	// The branch-derived fallback state MUST survive a collector miss so a
@@ -137,10 +137,49 @@ func TestAttachPRStatusResetsCollectorFields(t *testing.T) {
 	if w.PrState != "closed" {
 		t.Errorf("branch-derived PrState fallback must be preserved on collector miss, got %q: %+v", w.PrState, w)
 	}
+	// Likewise the branch-derived draft flag: the collector queries
+	// `viewer { pullRequests }`, so a draft authored by anyone else is ALWAYS a
+	// miss here. Wiping it would render a teammate's draft as a plain open PR.
+	if !w.PrIsDraft {
+		t.Errorf("branch-derived PrIsDraft fallback must be preserved on collector miss: %+v", w)
+	}
+}
+
+// TestAttachPRStatusDraftFallbackNotOwnedByCollector pins the fix for the
+// teammate-draft gap: the viewer-wide collector only ever returns the
+// AUTHENTICATED USER'S OWN PRs, so a draft opened by someone else reaches the
+// client solely through enrichWindowPR's branch-derived seed. This asserts both
+// halves of the dual-source contract — a collector MISS preserves the seed, and a
+// collector HIT still overrides it.
+func TestAttachPRStatusDraftFallbackNotOwnedByCollector(t *testing.T) {
+	hub := &sseHub{
+		prStatus: stubSnapshotter{snap: map[string]prstatus.PRStatus{
+			// The viewer's own PR, which the collector says is NOT a draft.
+			"mine": {Number: 1, URL: "mine", State: "open", Checks: "pass", IsDraft: false},
+		}},
+	}
+	sess := []sessions.ProjectSession{{
+		Name: "dev",
+		Windows: []tmux.WindowInfo{
+			// Teammate's draft: branch channel seeded it, collector has no entry.
+			{Index: 0, PrNumber: intp(2597), PrURL: strp("theirs"), PrState: "open", PrIsDraft: true},
+			// Viewer's own PR: collector HIT wins and clears a stale seed.
+			{Index: 1, PrNumber: intp(1), PrURL: strp("mine"), PrState: "open", PrIsDraft: true},
+		},
+	}}
+
+	hub.attachPRStatus(sess)
+
+	if !sess[0].Windows[0].PrIsDraft {
+		t.Errorf("collector miss must preserve the branch-seeded draft flag: %+v", sess[0].Windows[0])
+	}
+	if sess[0].Windows[1].PrIsDraft {
+		t.Errorf("collector hit must override the seed (authoritative on a hit): %+v", sess[0].Windows[1])
+	}
 }
 
 // TestAttachPRStatusFetchedAt verifies PrFetchedAt is collector-join-owned like
-// PrChecks/PrReview/PrIsDraft: set from the snapshot entry's FetchedAt on a
+// PrChecks/PrReview: set from the snapshot entry's FetchedAt on a
 // URL-keyed hit, and reset to nil on a miss (incl. empty/nil PrURL and a
 // pre-populated stale value) so a URL-miss window carries no stale timestamp.
 func TestAttachPRStatusFetchedAt(t *testing.T) {

@@ -451,10 +451,13 @@ type WindowInfo struct {
 	FabStage        string `json:"fabStage,omitempty"`
 	FabDisplayState string `json:"fabDisplayState,omitempty"` // pipeline state of the displayed stage; empty when fab reports null/omits the field
 	// PR fields. PrURL/PrNumber come from `fab pane map` (filesystem, cheap)
-	// via the sessions enrichment join (Layer 1). PrState/PrChecks/PrReview/
-	// PrIsDraft are attached by the SSE hub from the in-memory prstatus
-	// collector snapshot (Layer 3) — only for change-bound windows. Both
-	// layers are populated outside this package.
+	// via the sessions enrichment join (Layer 1), which also seeds branch-derived
+	// PrState/PrIsDraft. PrChecks/PrReview are attached by the SSE hub from the
+	// in-memory prstatus collector snapshot (Layer 3), which also OVERRIDES
+	// PrState/PrIsDraft on a URL hit but preserves the Layer-1 seed on a miss —
+	// the collector only sees the authenticated user's own PRs, so a teammate's
+	// draft reaches the client solely via that seed. Both layers are populated
+	// outside this package.
 	PrURL     *string `json:"prUrl,omitempty"`
 	PrNumber  *int    `json:"prNumber,omitempty"`
 	PrState   string  `json:"prState,omitempty"`
@@ -463,8 +466,8 @@ type WindowInfo struct {
 	PrIsDraft bool    `json:"prIsDraft,omitempty"`
 	// PrFetchedAt is when the joined PR status was last fetched by the viewer-wide
 	// collector (prstatus.PRStatus.FetchedAt). Collector-join-owned like
-	// PrChecks/PrReview/PrIsDraft: set on a URL-keyed snapshot hit, reset to nil on
-	// a miss. Surfaced in the StatusDotTip as an ambient "checked Xs ago" freshness
+	// PrChecks/PrReview: set on a URL-keyed snapshot hit, reset to nil on a miss.
+	// Surfaced in the StatusDotTip as an ambient "checked Xs ago" freshness
 	// line; a manual refresh visibly resets it.
 	PrFetchedAt *time.Time `json:"prFetchedAt,omitempty"`
 	RkType      string     `json:"rkType,omitempty"`

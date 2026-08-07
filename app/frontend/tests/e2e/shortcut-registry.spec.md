@@ -12,7 +12,10 @@ actions stay palette-reachable). Also covers the **macOS ⌘-tier demotions**
 (260730-n789) via a spoofed-platform block: ⌘[/⌘] back/forward and ⌘/
 overlay resolve on mac hosts (deep mac paths — shell-host N/T/W demotion,
 claimed sets — are unit-tested in `lib/keybindings.test.ts`; e2e runs on
-Linux).
+Linux). Finally it covers the **split-pane chords** (260807-rbx5): the
+divider pair ⇧Ctrl+\/⇧Ctrl+- splitting side-by-side then stacked on this
+host, and ⌘D/⇧⌘D doing the same on a spoofed mac (the `macCode` refinement —
+both actions bound and palette-hinted on every host).
 
 ## Shared setup
 
@@ -23,6 +26,8 @@ Linux).
     `?server=` query is still intercepted).
   - `**/api/keybindings*` → three curated tmux bindings (two root-table, one
     prefix-table) for the overlay's read-only TMUX section (260801-sm6g).
+  - `**/api/windows/*/split*` (via `mockSplit`, per split test) → 200; each
+    POST body is captured for assertion (260807-rbx5).
   - `/ws/state` (via `mockStateSocket`) → session `dev` with three windows:
     `@1` "win-one" (active), `@2` "win-two", `@3` "win-three".
   - The terminals mux WebSocket (`/ws/terminals`) is stubbed.
@@ -183,6 +188,49 @@ chord dispatches.
    `**/api/sessions*`; open `/default/1`.
 2. Press Meta+N, then Shift+Meta+N.
 3. Wait 300ms; assert no POST fired and the URL is unchanged.
+
+### `Shift+Ctrl+\ and Shift+Ctrl+- split side-by-side then stacked on the terminal route`
+
+**What it proves:** the divider-pair chords reuse the
+`Window: Split Horizontal|Vertical` palette bodies — each fires one
+`POST /api/windows/@1/split` carrying its direction and the window's worktree
+path — while the terminal owns focus (the shifted-tier seam refusal bubbles
+both chords).
+
+**Steps:**
+1. Mock the backend plus a body-capturing route on `**/api/windows/*/split*`;
+   open `/default/1`.
+2. Press Shift+Ctrl+\ → one POST; press Shift+Ctrl+- → a second POST.
+3. Assert the two bodies are `{horizontal: true, cwd: "/tmp/win-one"}` then
+   `{horizontal: false, cwd: "/tmp/win-one"}`.
+
+### `the palette hints both splits with the divider-pair chords`
+
+**What it proves:** the effective map reaches the palette — on a Win/Linux
+host `Window: Split Horizontal` advertises `Shift+Ctrl+\` and
+`Window: Split Vertical` advertises `Shift+Ctrl+-` (both bound; the mac
+`macCode` refinement never applies here).
+
+**Steps:**
+1. Mock the backend; open `/default/1`; open the palette (`Meta+k`).
+2. Fill the filter with "Window: Split" → both split entries render.
+3. Assert the texts `Shift+Ctrl+\` and `Shift+Ctrl+-` each appear exactly
+   once.
+
+### `⌘D and ⇧⌘D split horizontally then vertically on a mac host`
+
+**What it proves:** on macOS (spoofed platform) both splits refine to the D
+keycap (`macCode`), with `split-horizontal` also demoting to the unshifted ⌘
+tier while `split-vertical` keeps the shifted ⇧⌘ tier — so the pair fires
+from one keycap on different modifiers, ⌘D exercising the mac cmd-tier seam
+refusal and ⇧⌘D the shifted-tier one.
+
+**Steps:**
+1. Spoof the mac platform; mock the backend plus the split-capturing route;
+   open `/default/1`.
+2. Press Meta+D → one POST; press Shift+Meta+D → a second POST.
+3. Assert the two bodies are `{horizontal: true, cwd: "/tmp/win-one"}` then
+   `{horizontal: false, cwd: "/tmp/win-one"}`.
 
 ### `Shift+Ctrl+N is inert in a browser host (create-session stays palette-only)`
 

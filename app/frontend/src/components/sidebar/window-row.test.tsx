@@ -459,6 +459,25 @@ describe("WindowRow", () => {
       expect(screen.getByTestId("row-pr-glyph").className).toContain("text-purple-400");
     });
 
+    // e30p: draft is a GLYPH-ONLY distinction. The dot-level test earlier in
+    // this file ("renders a purple solid for a draft with passing checks")
+    // still asserts purple for the same window shape — the two surfaces
+    // deliberately disagree, and that test is correct as-is.
+    it("renders the glyph gray for an open draft PR", () => {
+      const win = makeWindow({
+        windowId: "@0",
+        index: 0,
+        prNumber: 386,
+        prState: "open",
+        prIsDraft: true,
+        prChecks: "pass",
+      });
+      renderRowWithIcons(win);
+      const glyph = screen.getByTestId("row-pr-glyph");
+      expect(glyph.className).toContain("text-text-secondary");
+      expect(glyph.className).not.toContain("text-accent-green");
+    });
+
     it("renders the glyph red for a failing PR (checks fail / changes requested)", () => {
       const win = makeWindow({ windowId: "@0", index: 0, prNumber: 386, prState: "open", prChecks: "fail" });
       renderRowWithIcons(win);

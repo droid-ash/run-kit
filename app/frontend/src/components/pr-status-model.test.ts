@@ -88,7 +88,9 @@ describe("prOwnsDot — owned-PR gate", () => {
 });
 
 // 93dy: glyph color follows the shared vocabulary — red ONLY for fail-ish,
-// then GitHub-style by state: green for open, purple for merged.
+// then gray for an OPEN DRAFT (e30p), then GitHub-style by state: green for
+// open, purple for merged. The draft branch is gated on `prState === "open"`,
+// so it only ever displaces the open-green case.
 describe("prGlyphColor — rest-glyph color mapping", () => {
   it("open + passing checks → green", () => {
     expect(prGlyphColor(makeWindow({ prNumber: 7, prState: "open", prChecks: "pass" }))).toBe(
@@ -120,5 +122,51 @@ describe("prGlyphColor — rest-glyph color mapping", () => {
         makeWindow({ prNumber: 7, prState: "open", prChecks: "pass", prReview: "changes_requested" }),
       ),
     ).toBe("text-red-400");
+  });
+
+  // e30p: the draft branch — gray, below fail, gated on `prState === "open"`.
+  // Glyph-only: the DOT still reads a passing draft as `healthy` (green means
+  // health, not merge-readiness), so the two surfaces deliberately disagree.
+  it("open + draft → gray (GitHub renders drafts gray; the inert token)", () => {
+    expect(
+      prGlyphColor(makeWindow({ prNumber: 7, prState: "open", prIsDraft: true, prChecks: "pass" })),
+    ).toBe("text-text-secondary");
+  });
+
+  it("draft + failing checks → red (fail still wins over draft)", () => {
+    expect(
+      prGlyphColor(makeWindow({ prNumber: 7, prState: "open", prIsDraft: true, prChecks: "fail" })),
+    ).toBe("text-red-400");
+  });
+
+  it("draft + changes requested → red (isFailish covers review too)", () => {
+    expect(
+      prGlyphColor(
+        makeWindow({
+          prNumber: 7,
+          prState: "open",
+          prIsDraft: true,
+          prChecks: "pass",
+          prReview: "changes_requested",
+        }),
+      ),
+    ).toBe("text-red-400");
+  });
+
+  it("draft + checks pending → gray (draft sits above the open-green branch)", () => {
+    expect(
+      prGlyphColor(
+        makeWindow({ prNumber: 7, prState: "open", prIsDraft: true, prChecks: "pending" }),
+      ),
+    ).toBe("text-text-secondary");
+  });
+
+  it("merged + draft → purple (unreachable in practice; pins the open-gate)", () => {
+    // GitHub un-drafts on merge, so this window shape never occurs live. The
+    // assertion pins that the draft branch is `prState === "open"`-gated, which
+    // is what keeps merged→purple untouched BY CONSTRUCTION rather than by luck.
+    expect(prGlyphColor(makeWindow({ prNumber: 7, prState: "merged", prIsDraft: true }))).toBe(
+      "text-purple-400",
+    );
   });
 });

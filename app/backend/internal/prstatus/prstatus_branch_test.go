@@ -544,6 +544,37 @@ func TestPickBranchPR_SkipsEmptyURL(t *testing.T) {
 	}
 }
 
+// TestPickBranchPR_CarriesIsDraft: the branch channel must surface isDraft, since
+// it is the ONLY author-agnostic source of the flag — the viewer-wide collector
+// queries `viewer { pullRequests }` and so never returns a teammate's draft. A
+// node with no isDraft key parses to false. (That is the non-draft case only — a
+// gh too old to know the field rejects the whole --json list and exits non-zero,
+// so branchPRExec errors and refresh() keeps last-good rather than seeing nodes
+// without the key.)
+func TestPickBranchPR_CarriesIsDraft(t *testing.T) {
+	out := branchListJSON(
+		`{"number":2597,"url":"https://x/pull/2597","state":"OPEN","isDraft":true,"updatedAt":"2026-08-07T00:00:00Z"}`,
+	)
+	pr, err := pickBranchPR(out)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if pr == nil || !pr.IsDraft {
+		t.Fatalf("expected the draft flag to survive the parse, got %+v", pr)
+	}
+
+	out = branchListJSON(
+		`{"number":2598,"url":"https://x/pull/2598","state":"OPEN","updatedAt":"2026-08-07T00:00:00Z"}`,
+	)
+	pr, err = pickBranchPR(out)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if pr == nil || pr.IsDraft {
+		t.Fatalf("a node with no isDraft key must parse to false, got %+v", pr)
+	}
+}
+
 // TestBranchRefresher_DefaultBranchExcluded: a pair whose branch is the repo's
 // default branch is excluded — the branch-list gh query is NEVER run for it, and
 // Snapshot returns (nil, false).

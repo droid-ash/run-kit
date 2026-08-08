@@ -581,6 +581,15 @@ func windowBranchRepo(w *tmux.WindowInfo) (repoDir, branch string) {
 // would carry prNumber set + prState "" and the frontend's prOwnsDot would paint
 // a solid done-square for a dead PR. MapBranchState maps unknown/empty to "" so
 // an unconfident state never defaults to "open" and re-creates that bug.
+//
+// PrIsDraft is seeded the same way and for a sharper reason: the viewer-wide
+// collector queries `viewer { pullRequests }`, so it only ever sees the
+// AUTHENTICATED USER'S OWN PRs. A draft opened by a teammate is resolved by this
+// branch channel (author-agnostic) but MISSES the URL join, so without this seed
+// its prIsDraft stays false and the row glyph renders as a non-draft. The
+// collector still overrides on a hit, and since it polls at 90s against this
+// channel's 30s it can serve a briefly stale flag — accepted, and exactly how
+// PrState already behaves.
 func enrichWindowPR(w *tmux.WindowInfo) {
 	repoDir, branch := windowBranchRepo(w)
 	if branch == "" {
@@ -595,6 +604,7 @@ func enrichWindowPR(w *tmux.WindowInfo) {
 		w.PrURL = &url
 		w.PrNumber = &num
 		w.PrState = prstatus.MapBranchState(pr.State)
+		w.PrIsDraft = pr.IsDraft
 	}
 }
 

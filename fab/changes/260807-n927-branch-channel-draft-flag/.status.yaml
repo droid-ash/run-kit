@@ -1,0 +1,56 @@
+id: n927
+name: 260807-n927-branch-channel-draft-flag
+created: 2026-08-07T18:19:24Z
+created_by: droid-ash
+change_type: fix
+issues: []
+progress:
+    intake: done
+    apply: skipped
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: active
+plan:
+    generated: true
+    task_count: 1
+    acceptance_count: 1
+    acceptance_completed: 1
+confidence:
+    certain: 4
+    confident: 2
+    tentative: 1
+    unresolved: 0
+    score: 4.1
+    fuzzy: true
+    dimensions:
+        signal: 77.1
+        reversibility: 77.9
+        competence: 78.6
+        disambiguation: 77.9
+stage_metrics:
+    intake: {started_at: "2026-08-07T18:19:24Z", driver: fab-new, iterations: 1, completed_at: "2026-08-07T18:21:50Z"}
+    apply: {iterations: 1}
+    review: {started_at: "2026-08-07T18:22:18Z", driver: fab-adopt, iterations: 1, completed_at: "2026-08-07T18:34:09Z"}
+    hydrate: {started_at: "2026-08-07T18:34:09Z", driver: fab-adopt, iterations: 1, completed_at: "2026-08-07T18:41:31Z"}
+    ship: {started_at: "2026-08-07T18:41:31Z", driver: fab-adopt, iterations: 1, completed_at: "2026-08-07T18:44:39Z"}
+    review-pr: {started_at: "2026-08-07T18:44:39Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/run-kit/pull/540
+summary: 'Source the PR draft flag from the author-agnostic branch channel: BranchPR.IsDraft (isDraft in the gh pr list --json list) seeds WindowInfo.PrIsDraft via enrichWindowPR, and attachPRStatus stops resetting it — making PrIsDraft dual-sourced exactly like PrState, so a teammate''s draft renders gray instead of plain open-green.'
+true_impact:
+    added: 384
+    deleted: 43
+    net: 341
+    excluding:
+        added: 145
+        deleted: 37
+        net: 108
+    tests:
+        added: 76
+        deleted: 6
+        net: 70
+    computed_at: "2026-08-07T18:44:39Z"
+    computed_at_stage: ship
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-08-07T18:44:39Z

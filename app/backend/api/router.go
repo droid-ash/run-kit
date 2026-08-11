@@ -137,12 +137,12 @@ func (prodWtOps) Open(ctx context.Context, path, app string) error {
 
 // Server holds handler dependencies.
 type Server struct {
-	logger        *slog.Logger
-	sessions      SessionFetcher
-	tmux          TmuxOps
-	riff          RiffEngine
-	wt            WtOps
-	hostname      string
+	logger   *slog.Logger
+	sessions SessionFetcher
+	tmux     TmuxOps
+	riff     RiffEngine
+	wt       WtOps
+	hostname string
 	// sshHost is the optional RK_SSH_HOST alias remote clients use to reach
 	// this host, surfaced on GET /api/health for the frontend's ssh-remote
 	// deeplinks. Seeded from config at startup (or SetSSHHost in tests);
@@ -155,12 +155,17 @@ type Server struct {
 	// RK_SSH_HOST is unset. Pure derivation per Constitution X — no config.
 	// Empty on lookup failure = the frontend omits the `user@` prefix.
 	sshUser string
-	metrics       *metrics.Collector
-	services      *ports.Collector
-	prStatus      *prstatus.Collector
-	updateChecker *updatecheck.Checker
-	sseHub        *sseHub
-	sseOnce       sync.Once
+	// codeServerPort is the optional RK_CODE_SERVER_PORT config value (0 =
+	// unset = the code lens/surface is off). Seeded from config.Load() at
+	// startup; handed to the SSE hub, which broadcasts the host-level
+	// {"port", "reachable"} signal.
+	codeServerPort int
+	metrics        *metrics.Collector
+	services       *ports.Collector
+	prStatus       *prstatus.Collector
+	updateChecker  *updatecheck.Checker
+	sseHub         *sseHub
+	sseOnce        sync.Once
 	// version is the running daemon version (ldflags-injected main.version),
 	// seeded once at startup via SetVersion. Read by handleRestart's dev guard
 	// (a "dev" build must not bounce the real daemon out from under `just dev`'s
@@ -225,6 +230,7 @@ func (s *Server) initSSEHub() {
 			pc = s.prStatus
 		}
 		s.sseHub = newSSEHub(s.sessions, s.metrics, s.services, pc)
+		s.sseHub.codeServerPort = s.codeServerPort
 	})
 }
 
@@ -531,18 +537,21 @@ func NewRouterAndServer(ctx context.Context, logger *slog.Logger) (chi.Router, *
 	// viewer-wide collector; both exit on ctx cancellation.
 	prstatus.DefaultBranchRefresher.Start(ctx)
 
+	cfg := config.Load()
+
 	s := &Server{
-		logger:   logger,
-		sessions: &prodSessionFetcher{},
-		tmux:     &prodTmuxOps{},
-		riff:     prodRiffEngine{},
-		wt:       prodWtOps{},
-		hostname: hostname,
-		sshHost:  config.Load().SSHHost,
-		sshUser:  sshUser,
-		metrics:  mc,
-		services: svc,
-		prStatus: pc,
+		logger:         logger,
+		sessions:       &prodSessionFetcher{},
+		tmux:           &prodTmuxOps{},
+		riff:           prodRiffEngine{},
+		wt:             prodWtOps{},
+		hostname:       hostname,
+		sshHost:        cfg.SSHHost,
+		sshUser:        sshUser,
+		codeServerPort: cfg.CodeServerPort, // 0 = code lens/surface off
+		metrics:        mc,
+		services:       svc,
+		prStatus:       pc,
 	}
 	// Wire the two on-demand PR-refresh kicks for POST /api/status/refresh. The
 	// collector kick nil-guards its own pointer (a partially-wired server may

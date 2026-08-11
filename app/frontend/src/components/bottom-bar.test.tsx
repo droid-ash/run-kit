@@ -1,18 +1,47 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { useEffect } from "react";
 import { BottomBar } from "./bottom-bar";
 import { TIP_OPEN_DELAY_MS } from "@/components/tip";
-import { FocusedTerminalProvider } from "@/contexts/focused-terminal-context";
+import {
+  FocusedTerminalProvider,
+  useFocusedTerminal,
+  type FocusedTerminal,
+} from "@/contexts/focused-terminal-context";
 import { ChromeProvider } from "@/contexts/chrome-context";
+import { stubMatchMedia } from "@/test-utils/match-media";
 
-function renderBottomBar(overrides: Partial<React.ComponentProps<typeof BottomBar>> = {}) {
-  // Tests render the BottomBar with no focused terminal; the existing
+/** A compose target, as TerminalClient/BoardPane would register one. */
+const COMPOSE_TARGET: FocusedTerminal = {
+  wsRef: { current: null },
+  server: "srv",
+  session: "sess",
+  windowId: "@1",
+};
+
+/** Stands in for the real producers (TerminalClient, BoardPane) so
+ *  target-gated surfaces render. */
+function FocusSeeder({ focus }: { focus: FocusedTerminal }) {
+  const { setFocused } = useFocusedTerminal();
+  useEffect(() => {
+    setFocused(focus);
+  }, [focus, setFocused]);
+  return null;
+}
+
+function renderBottomBar(
+  overrides: Partial<React.ComponentProps<typeof BottomBar>> = {},
+  focus: FocusedTerminal = null,
+) {
+  // Tests default to NO focused terminal; the existing
   // `wsRef.current?.readyState !== OPEN` guard ensures input handlers no-op.
+  // Pass `focus` for surfaces gated on a live compose target.
   // ChromeProvider supplies `composeStripEnabled` (the `>_` chip's pressed
   // state) read via `useChromeState`.
   return render(
     <ChromeProvider>
       <FocusedTerminalProvider>
+        {focus && <FocusSeeder focus={focus} />}
         <BottomBar
           onFocusTerminal={vi.fn()}
           onScrollLockChange={vi.fn()}
@@ -321,5 +350,69 @@ describe("BottomBar chip tips (260723-fm08)", () => {
       const chip = screen.getByLabelText(name);
       expect(chip).not.toHaveAttribute("title");
     }
+  });
+});
+
+describe("BottomBar chip order + compose hint (260811-0f3d)", () => {
+  // The fine-pointer chip run renders ⌘K (palette) FIRST and >_ (compose)
+  // LAST — compose is the higher-touch control and takes the end-of-run
+  // position. The dead space right of the pair carries a dimmed compose
+  // education line, gated on: compose target present, strip OFF, fine
+  // pointer, ≥lg viewport (the lg gate is the CSS `hidden lg:flex` pair —
+  // jsdom asserts the classes; the 375px budget is untouched). jsdom
+  // platform is "other", so the chord renders in the Ctrl spelling.
+  const HINT_TEXT = /compose — type here, send to the pane/;
+
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the palette chip before the compose chip in DOM order", () => {
+    renderBottomBar({ onOpenCompose: vi.fn() });
+    const palette = screen.getByLabelText("Open command palette");
+    const compose = screen.getByLabelText("Compose text");
+    expect(
+      palette.compareDocumentPosition(compose) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("shows the compose hint with the registry-resolved chord keycap while the strip is off", () => {
+    renderBottomBar({ onOpenCompose: vi.fn() }, COMPOSE_TARGET);
+    const hint = screen.getByText(HINT_TEXT);
+    const line = hint.parentElement!;
+    // Non-interactive education copy: aria-hidden (the adjacent chip carries
+    // the accessible name), CSS-gated to wide viewports.
+    expect(line).toHaveAttribute("aria-hidden", "true");
+    expect(line.className).toContain("hidden");
+    expect(line.className).toContain("lg:flex");
+    expect(line.querySelector("kbd")).toHaveTextContent("Shift+Ctrl+E");
+  });
+
+  it("hides the hint once the compose strip is on — the feature has been found", () => {
+    localStorage.setItem("runkit-compose-strip", "true");
+    renderBottomBar({ onOpenCompose: vi.fn() }, COMPOSE_TARGET);
+    expect(screen.queryByText(HINT_TEXT)).not.toBeInTheDocument();
+  });
+
+  it("hides the hint on coarse pointers — chords are noise on touch", () => {
+    stubMatchMedia((query) => query === "(pointer: coarse)");
+    renderBottomBar({ onOpenCompose: vi.fn() }, COMPOSE_TARGET);
+    expect(screen.queryByText(HINT_TEXT)).not.toBeInTheDocument();
+  });
+
+  it("omits the hint when there is no compose target", () => {
+    // `onOpenCompose` is wired unconditionally in app.tsx, so the absence of a
+    // focused terminal — not the prop — is what must suppress the hint.
+    renderBottomBar({ onOpenCompose: vi.fn() });
+    expect(screen.queryByText(HINT_TEXT)).not.toBeInTheDocument();
+  });
+
+  it("keeps the hint text but drops the keycap when compose-toggle is disabled", () => {
+    localStorage.setItem("runkit-keybindings", JSON.stringify({ "compose-toggle": null }));
+    renderBottomBar({ onOpenCompose: vi.fn() }, COMPOSE_TARGET);
+    const hint = screen.getByText(HINT_TEXT);
+    expect(hint.parentElement!.querySelector("kbd")).toBeNull();
   });
 });

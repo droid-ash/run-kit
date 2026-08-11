@@ -2325,8 +2325,8 @@ function ServerGroupInner(props: ServerGroupProps) {
 
   return (
     <section
+      role="presentation"
       className="border-b border-border last:border-b-0"
-      aria-labelledby={`server-header-${server}`}
     >
       {/* Server header — a tinted filled bar carrying the server's color, with
           a chevron disclosure marker to match the rest of the sidebar's
@@ -2354,7 +2354,6 @@ function ServerGroupInner(props: ServerGroupProps) {
         }
       >
         <button
-          id={`server-header-${server}`}
           type="button"
           onClick={() => onToggleOpen(server)}
           aria-expanded={isOpen}

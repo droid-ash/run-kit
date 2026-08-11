@@ -128,7 +128,9 @@ describe("HostOverviewPage — Services zone", () => {
   it("renders a 'No services' fallback when the services list is empty", async () => {
     mockServices = [];
     renderPage();
-    expect(screen.getByText("No services")).toBeTruthy();
+    expect(
+      screen.getByText(/^No services/),
+    ).toBeTruthy();
   });
 
   it("renders a tile per service with port primary and process secondary", async () => {
@@ -384,8 +386,22 @@ describe("HostOverviewPage — BOARDS zone", () => {
     renderPage();
     expect(screen.getByText("0 boards")).toBeInTheDocument();
     expect(
-      screen.getByText("Pin a window to start a board"),
+      screen.getByText(/^No boards yet — hover a sidebar window row/),
     ).toBeInTheDocument();
+    // Fine pointer (the beforeEach default): the derived palette chord clause
+    // rides along — the chord itself is registry-derived, so match its shape.
+    expect(screen.getByText(/^No boards yet — .*→ Pin:$/)).toBeInTheDocument();
+  });
+
+  it("drops the palette chord from the boards hint on a coarse pointer", () => {
+    // Chord hints never render on touch (the app's chord-hints-off-touch rule,
+    // 260811-ke2s) — the pin-icon path is all a touch user can act on.
+    stubMatchMedia(() => true);
+    renderPage();
+    expect(
+      screen.getByText("No boards yet — hover a sidebar window row and click its 📌"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/→ Pin:/)).not.toBeInTheDocument();
   });
 
   it("makes board tiles draggable for reorder (board-list-reorder wiring)", () => {

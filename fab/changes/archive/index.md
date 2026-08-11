@@ -1,5 +1,6 @@
 # Archived Changes
 
+- **260730-op63-proxy-content-length-fix** — Proxy HTML Rewrite Content-Length Fix
 - **260807-2ept-pr-status-cold-start** — PR Status Cold-Start Latency + Batched Branch Derivation
 - **260722-73al-tip-tooltip-system** — App-Wide Tier-1 Tooltip System (`Tip` Component)
 - **260720-t1ca-sidebar-server-group-header-tint** — Sidebar SESSIONS Pane — Tinted Server-Group Header Fill

@@ -16,10 +16,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"rk/internal/config"
 )
 
-// proxyCache holds per-port ReverseProxy instances. Keyed by port number.
-// sync.Map is appropriate here: read-heavy, write-rare, single-digit entry count.
+// proxyCache holds per-route ReverseProxy instances. Keyed by route prefix AND
+// target port ("/proxy/{port}|{port}", "/code|{port}") — read-heavy,
+// write-rare, single-digit entry count.
 var proxyCache sync.Map
 
 // rewritePattern matches localhost/127.0.0.1 URLs in HTML attributes.
@@ -28,26 +31,21 @@ var rewritePattern = regexp.MustCompile(
 	`(https?:)?//(localhost|127\.0\.0\.1):(\d+)`,
 )
 
-// getOrCreateProxy returns a cached ReverseProxy for the given port, creating
-// one on demand if absent.
-func getOrCreateProxy(port int) *httputil.ReverseProxy {
-	key := port
-	if cached, ok := proxyCache.Load(key); ok {
-		return cached.(*httputil.ReverseProxy)
-	}
-
+// newPrefixProxy builds a ReverseProxy that forwards to 127.0.0.1:{port},
+// stripping stripPrefix from the inbound path and rewriting localhost:{port}
+// references in HTML responses via pathFor (so a /proxy/{port} route rewrites
+// per matched port while the /code route rewrites everything to /code).
+func newPrefixProxy(port int, stripPrefix string, pathFor func(matchedPort int) string) *httputil.ReverseProxy {
 	target := &url.URL{
 		Scheme: "http",
 		Host:   fmt.Sprintf("127.0.0.1:%d", port),
 	}
 
-	proxy := &httputil.ReverseProxy{
+	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(target)
-			// Strip the /proxy/{port} prefix from the path
-			origPath := r.Out.URL.Path
-			prefix := fmt.Sprintf("/proxy/%d", port)
-			r.Out.URL.Path = strings.TrimPrefix(origPath, prefix)
+			// Strip the route prefix from the path
+			r.Out.URL.Path = strings.TrimPrefix(r.Out.URL.Path, stripPrefix)
 			if r.Out.URL.Path == "" {
 				r.Out.URL.Path = "/"
 			}
@@ -61,21 +59,54 @@ func getOrCreateProxy(port int) *httputil.ReverseProxy {
 			// disconnected forever"). Proven by spike 2026-08-11.
 			r.SetXForwarded()
 		},
-		ModifyResponse: makeModifyResponse(port),
+		ModifyResponse: makeModifyResponse(pathFor),
 		Transport: &http.Transport{
 			DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
 			ResponseHeaderTimeout: 10 * time.Second,
 			MaxIdleConnsPerHost:   10,
 		},
 	}
+}
 
-	actual, _ := proxyCache.LoadOrStore(key, proxy)
+// cachedPrefixProxy returns a cached ReverseProxy for the given route prefix
+// and target port, creating one on demand if absent. The port is part of the
+// key because /code's prefix is FIXED while its target resolves per request:
+// keying on the prefix alone would pin whichever port resolved first for the
+// rest of the process, misrouting every later request (and making package
+// tests order-dependent). For /proxy/{port} the port is already in the prefix,
+// so it only makes the key's contract explicit.
+func cachedPrefixProxy(port int, stripPrefix string, pathFor func(matchedPort int) string) *httputil.ReverseProxy {
+	key := fmt.Sprintf("%s|%d", stripPrefix, port)
+	if cached, ok := proxyCache.Load(key); ok {
+		return cached.(*httputil.ReverseProxy)
+	}
+	actual, _ := proxyCache.LoadOrStore(key, newPrefixProxy(port, stripPrefix, pathFor))
 	return actual.(*httputil.ReverseProxy)
 }
 
+// proxyPathFor rewrites a matched localhost port reference to its /proxy path
+// (keyed by the MATCHED port — the /proxy/{port} route's historical behavior).
+func proxyPathFor(matchedPort int) string {
+	return fmt.Sprintf("/proxy/%d", matchedPort)
+}
+
+// getOrCreateProxy returns a cached ReverseProxy for the given port, creating
+// one on demand if absent.
+func getOrCreateProxy(port int) *httputil.ReverseProxy {
+	return cachedPrefixProxy(port, fmt.Sprintf("/proxy/%d", port), proxyPathFor)
+}
+
+// getOrCreateCodeProxy returns the cached ReverseProxy for the stable /code
+// route (260811-a2bo): same machinery as /proxy/{port}, but the path prefix is
+// fixed and every localhost reference rewrites to /code — the route is the
+// code-server workspace-state identity, so the port never appears in a URL.
+func getOrCreateCodeProxy(port int) *httputil.ReverseProxy {
+	return cachedPrefixProxy(port, "/code", func(int) string { return "/code" })
+}
+
 // makeModifyResponse returns a ModifyResponse function that rewrites HTML
-// responses, replacing localhost:{port} references with /proxy/{port} paths.
-func makeModifyResponse(port int) func(*http.Response) error {
+// responses, replacing localhost:{port} references with pathFor(matchedPort).
+func makeModifyResponse(pathFor func(matchedPort int) string) func(*http.Response) error {
 	return func(resp *http.Response) error {
 		// HEAD responses have no body to rewrite; pass through so the upstream
 		// Content-Length (the GET entity length) is preserved rather than
@@ -110,7 +141,7 @@ func makeModifyResponse(port int) func(*http.Response) error {
 			return nil // Read error — pass through
 		}
 
-		rewritten := rewriteHTML(body, port)
+		rewritten := rewriteHTML(body, pathFor)
 
 		if isGzipped {
 			var buf bytes.Buffer
@@ -140,8 +171,8 @@ func makeModifyResponse(port int) func(*http.Response) error {
 }
 
 // rewriteHTML replaces localhost:{port} and 127.0.0.1:{port} references in HTML
-// with /proxy/{port} paths.
-func rewriteHTML(body []byte, proxyPort int) []byte {
+// with pathFor(matchedPort) paths.
+func rewriteHTML(body []byte, pathFor func(matchedPort int) string) []byte {
 	return rewritePattern.ReplaceAllFunc(body, func(match []byte) []byte {
 		submatch := rewritePattern.FindSubmatch(match)
 		if len(submatch) < 4 {
@@ -151,7 +182,7 @@ func rewriteHTML(body []byte, proxyPort int) []byte {
 		if err != nil {
 			return match
 		}
-		return []byte(fmt.Sprintf("/proxy/%d", matchedPort))
+		return []byte(pathFor(matchedPort))
 	})
 }
 
@@ -178,5 +209,34 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxy := getOrCreateProxy(port)
+	proxy.ServeHTTP(w, r)
+}
+
+// handleCode is the HTTP handler for /code/* — the stable code-server route
+// (260811-a2bo). It reverse-proxies to 127.0.0.1:{resolved code-server port}
+// via the same machinery as /proxy/{port}, but the path is FIXED: code-server
+// keys browser-side workspace state (tabs, layout, IndexedDB) by the proxy
+// pathname, so the port is a private implementation detail and /code/ never
+// changes. The port is resolved per request (Constitution II — env is
+// process-lifetime stable, so this is four getenvs, not a config re-read).
+func (s *Server) handleCode(w http.ResponseWriter, r *http.Request) {
+	port := config.Load().ResolvedCodeServerPort()
+	if port == 0 {
+		writeError(w, http.StatusServiceUnavailable, "code-server port not resolvable")
+		return
+	}
+
+	// Redirect /code → /code/ (308, query preserved) — the same relative-base
+	// rule as /proxy/{port}: code-server resolves "./x" against "/code/".
+	if r.URL.Path == "/code" {
+		target := r.URL.Path + "/"
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, target, http.StatusPermanentRedirect)
+		return
+	}
+
+	proxy := getOrCreateCodeProxy(port)
 	proxy.ServeHTTP(w, r)
 }

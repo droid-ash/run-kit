@@ -273,15 +273,16 @@ const HostMetricsContext = createContext<MetricsSnapshot | null | undefined>(und
 const HostServicesContext = createContext<Service[] | undefined>(undefined);
 
 /** The host-global code-server signal broadcast as the `code-server` global
- *  event (260811-k3vp): the configured `RK_CODE_SERVER_PORT` (0 = unset = the
- *  code lens/surface is off) plus its TTL-cached reachability. Reachability
- *  governs the surface's CONTENT state only — availability keys off `port`. */
-export type CodeServerSignal = { port: number; reachable: boolean };
+ *  event (260811-k3vp; portless since 260811-a2bo — the port is server-private
+ *  behind the stable /code/ route): just the TTL-cached reachability.
+ *  Reachability governs the surface's CONTENT state only — availability is
+ *  gitRoot-derived and never needs this signal. */
+export type CodeServerSignal = { reachable: boolean };
 
 // The code-server signal lives in its OWN context (the HostServicesContext
 // precedent): host-global, delivered once per tick, so the per-tick repetition
 // does not cascade re-renders into unrelated consumers. `undefined` = outside
-// provider (throw); `null` = no signal yet OR unconfigured (feature off).
+// provider (throw); `null` = no signal yet.
 const CodeServerContext = createContext<CodeServerSignal | null | undefined>(undefined);
 
 type SessionProviderProps = {
@@ -356,9 +357,10 @@ export function SessionProvider({ children }: SessionProviderProps) {
   // (the `services` global event). Empty array until the first tick — never
   // null, so `/` consumers can map over it unconditionally.
   const [hostServices, setHostServices] = useState<Service[]>([]);
-  // Latest host-global code-server signal (the `code-server` event). `null`
-  // until the first event — which never arrives when RK_CODE_SERVER_PORT is
-  // unset, so `null` also means "feature off".
+  // Latest host-global code-server signal (the `code-server` event) — just
+  // `{reachable}` since 260811-a2bo. `null` until the first event; the port
+  // now resolves by convention (RK_PORT+2), so the broadcast is always on and
+  // `null` means "no signal yet", never "feature off".
   const [codeServer, setCodeServer] = useState<CodeServerSignal | null>(null);
   // Running daemon version from the server-global `event: version` (no leading
   // "v"). `null` until the first event. Drives the reload guard + update chip.
@@ -849,13 +851,10 @@ export function SessionProvider({ children }: SessionProviderProps) {
           break;
         }
         case "code-server": {
-          const d = data as { port?: number; reachable?: boolean };
-          if (typeof d.port === "number") {
-            applyCodeServer(JSON.stringify(data), {
-              port: d.port,
-              reachable: d.reachable === true,
-            });
-          }
+          const d = data as { reachable?: boolean };
+          applyCodeServer(JSON.stringify(data), {
+            reachable: d.reachable === true,
+          });
           break;
         }
         case "server-order": {
@@ -1438,9 +1437,10 @@ export function useHostServices(): Service[] {
 }
 
 /** Host-global code-server signal from the state socket's `code-server` global
- *  event (260811-k3vp). Available on EVERY route. Returns `null` before the
- *  first event AND when the feature is unconfigured (the backend broadcasts
- *  nothing without RK_CODE_SERVER_PORT) — so `null` means "code lens off". */
+ *  event (260811-k3vp; `{reachable}` only since 260811-a2bo). Available on
+ *  EVERY route. Returns `null` only before the first event — the port resolves
+ *  by convention, so the broadcast is always on and `null` never means "code
+ *  lens off" (availability is gitRoot-derived — see `hasCode`). */
 export function useCodeServer(): CodeServerSignal | null {
   const ctx = useContext(CodeServerContext);
   if (ctx === undefined) throw new Error("useCodeServer must be used within SessionProvider");

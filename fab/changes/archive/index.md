@@ -1,5 +1,107 @@
 # Archived Changes
 
+- **260812-z1ya-update-daemon-tmux-window** — Update Runs in a Daemon-Managed tmux Window
+- **260812-nm4p-top-bar-rail-toggle** — Top-Bar Right-Rail Toggle
+- **260812-d1at-relocate-footer-actions-top-bar** — Relocate Footer Actions to Top Bar
+- **260812-ab5v-surface-layout-core** — Surface Layout Core
+- **260812-71bv-code-server-seeded-profile** — Code-Server Seeded Profile
+- **260812-6rxw-code-server-launch-flags** — Curated Launch Flags for the Daemon-Managed code-server Spawn
+- **260811-sqe7-prerender-broadcast-envelopes** — Pre-render Broadcast Envelopes Once Per Event
+- **260811-m3f3-light-theme-signal-color-tokens** — Light-Theme Signal Color Tokens
+- **260811-ke2s-hidden-feature-education-microcopy** — Hidden-Feature Education Micro-Copy
+- **260811-k3vp-right-panel-code-lens** — Right Panel Phase 2 — Code Lens & CODE Surface
+- **260811-j6oy-reap-sockets-v2-dead-code** — Reap sockets-v2 dead code
+- **260811-g0t1-drag-window-board-pin** — Drag-to-Pin — Window Row onto Board Row
+- **260811-fgzi-shell-titlebar-arrow-release-flake** — Shell-Titlebar Arrow-Key Release Flake Root Fix
+- **260811-exsp-sidebar-tree-aria-presentation** — Sidebar Tree ARIA Presentational Server Wrappers
+- **260811-cj4b-sidebar-footer-chip-buttons** — Sidebar Footer Chip Buttons
+- **260811-a2bo-daemon-code-server-stable-route** — Daemon-Managed code-server & the Stable /code Route
+- **260811-2r1w-right-panel-shell-web-surface** — Right Panel Phase 1 — Rail, Panel Shell & Web Surface
+- **260811-239r-board-twin-dialogs-palette** — Dissolve Board-Twin Server Dialogs & Command Palette
+- **260811-0f3d-split-menu-keycaps-compose-hint** — Split-Menu Keycaps + Compose Chip Placement & Hint
+- **260810-xuej-closed-pr-row-glyph** — Closed PR Row Glyph
+- **260810-j93s-tmux-csi-u-extended-keys** — CSI-u Extended-Keys Format in tmux Configs
+- **260810-aqo6-statusdot-compositional-vocabulary-impl** — StatusDot Compositional Vocabulary (PR Eviction)
+- **260809-r4vk-pr-status-disk-seed** — PR-Status Disk Seed Across Restarts
+- **260808-ebgs-selection-bulk-close-send-prompt** — Selection Bulk Close + Send Prompt
+- **260807-s6zs-manual-check-update-surface** — Persist Manual Update-Check Results onto the Top-Bar Update Surface
+- **260807-rbx5-split-keyboard-shortcuts** — Split Pane Keyboard Shortcuts
+- **260807-nf9f-sidebar-multiselect-move-windows** — Sidebar Multi-Select of Window Rows + Bulk Move-to-Session
+- **260807-n927-branch-channel-draft-flag** — Source the PR Draft Flag from the Branch Channel
+- **260807-kddk-persist-sidebar-session-collapse** — Persist Sidebar Session Collapse State
+- **260807-e30p-draft-pr-row-glyph-color** — Draft PR State for the Row PR Glyph
+- **260807-8qvc-tmux-guard-shim-update-resilience** — tmux Guard Shim Update Resilience
+- **260806-s4av-row-flyout-session-fork** — Row-Flyout Session Fork (Same-Worktree Conversation Fork)
+- **260806-kadm-compose-send-history-recall** — Compose Strip Sent-History with ArrowUp Recall
+- **260806-2x2h-split-default-horizontal-first** — Split Default Horizontal First
+- **260805-htmy-daemon-layout-snapshots-restore** — Daemon Layout Snapshots + Restore
+- **260805-fi9m-bottom-bar-keyboard-aware-safe-floor** — Bottom-Bar Keyboard-Aware Safe-Area Floor
+- **260805-blyf-tmux-guard-path-shim** — tmux Guard PATH Shim
+- **260805-9hn1-shell-safe-area-inset-fix** — Shell Safe-Area Inset Fix
+- **260805-93dy-window-row-pr-glyph-register-flyout** — Sidebar Window-Row PR Glyph + Register Flyout Card
+- **260803-ufqr-logo-animation-polish** — Logo Animation Polish
+- **260802-lj98-compose-enter-insert-line** — Compose strip Enter=insert-line policy (terminal-faithful Enter matrix)
+- **260801-ujuk-spa-asset-cache-headers** — SPA Asset Cache Headers
+- **260801-sm6g-keyboard-shortcuts-consolidation** — Keyboard Shortcuts Consolidation
+- **260801-r8j2-shortcuts-map-modifier-picker** — Shortcuts Map Modifier Picker
+- **260801-mqim-tooltip-shortcut-chips-settings-binding** — Tooltip Shortcut Chips + Settings Keybinding
+- **260801-hsxm-compose-enter-policy-readline-keys** — Compose Enter Policy Flip + Readline Keys
+- **260801-f715-relay-device-attributes-responder** — Relay-Side Device Attributes Responder
+- **260801-5k2m-fix-stale-welcome-drag-region** — Fix Stale Welcome Drag Region Killing the Titlebar Host Switcher
+- **260801-3q1z-top-bar-menu-leading-icons** — Leading Icons on Top-Bar Menu Rows
+- **260801-3cag-desktop-persistent-host-renderers** — Desktop Persistent Host Renderers
+- **260801-35gv-ssh-remote-hosts** — SSH-Only Remote Hosts — `rk remote`
+- **260731-zeiy-consolidate-tmux-runner-core** — Consolidate tmux subprocess runner core into internal/tmux
+- **260731-yc7n-e2e-tmux-fixture-readiness** — E2E Tmux Fixture + Readiness Consolidation
+- **260731-vvco-desktop-menu-restart-update** — Desktop Shell "Restart to Update" Menu Item
+- **260731-tfr1-use-media-query-hook** — Shared useMediaQuery Hook
+- **260731-oiho-navbar-consolidation-menu-density** — Navbar Consolidation — Uniform Control Sizing, History-Nav Move, Control Demotion, Menu Density
+- **260731-ofws-shell-accent-titlebar-dock-badge** — Desktop Shell Accent Titlebar & Waiting Badge
+- **260731-nv5r-mac-host-switcher-alt-cmd** — Mac Host-Switcher Accelerators to ⌥⌘1–9
+- **260731-lu5e-frontend-typescript-7-bump** — Frontend TypeScript 7 Bump
+- **260731-5hm6-frontend-vitest-test-utils** — Frontend Vitest Test-Utils Module
+- **260731-5blj-desktop-path-fix-hosts-rename** — Desktop PATH Fix, Rename Removal & Host Terminology
+- **260731-4bqi-shell-strip-host-switcher-dropdown** — Host-Switcher Dropdown in the Desktop Shell Titlebar Strip
+- **260731-4404-go-internal-testutil** — Go internal/testutil Test Scaffolding Consolidation
+- **260731-3byh-umbrella-update-auto-restart** — Umbrella `rk update` with Desktop Auto-Restart
+- **260731-2kio-board-e2e-helpers** — Board E2E Helper Consolidation (_boards.ts)
+- **260730-pl4v-rk-desktop-install** — `rk desktop` — Quarantine-Free Desktop Installer
+- **260730-n789-macos-cmd-tier-shortcuts** — macOS Cmd-Tier Demotion & Help-Palette Renames
+- **260730-n2y9-desktop-last-path-restore-rename** — Desktop shell per-server last-visited-page restore + server rename affordance
+- **260730-ln1w-welcome-local-daemon-section** — Desktop Welcome "This Mac" Local-Daemon Section
+- **260730-ler1-desktop-windows-linux-packaging** — Desktop Shell Windows & Linux Packaging
+- **260730-hbyh-shortcut-macro-riff-bindings** — Macro Shortcut Bindings over Riff Presets
+- **260730-g40a-keyboard-shortcut-registry-overlay** — Keyboard Shortcut Registry, Uniform Shifted Tier & Cheatsheet Overlay
+- **260730-e9lz-shell-terminal-links-external** — Desktop shell terminal links open externally
+- **260730-9lez-shell-keyboard-tier-symmetry** — Shell Keyboard-Tier Symmetry
+- **260729-5uae-desktop-shell-release-ci** — Desktop Shell Release CI
+- **260728-04pg-electron-desktop-shell** — Electron Desktop Viewer Shell
+- **260727-w2d8-palette-open-pr** — Palette Open PR
+- **260724-6j1v-sidebar-footer-chrome-settings** — Sidebar Footer Global Chrome + Desktop Settings Dialog
+- **260724-2bmy-mobile-chrome-polish** — Mobile Chrome Polish
+- **260723-wwoi-label-picker-markers-shades** — Label Picker Markers & Shades
+- **260723-rma2-websocket-liveness-heartbeat-wake-probes** — WebSocket Liveness — Heartbeat + Wake Probes for State Socket and Relay Mux
+- **260723-o7q8-settings-dialog** — Settings Dialog
+- **260723-nris-sidebar-autoscroll-active-window-server** — Sidebar Autoscroll to Active Window and Active Server
+- **260723-l317-open-button-ssh-refresh-icon** — Open-Button SSH-Host Refresh + Last-Used Icon
+- **260722-y5c3-instance-accent-titlebar-wash** — Instance-Accent PWA Titlebar Wash (Mock Parity)
+- **260722-n2n4-view-switcher-menu-only** — View Switcher Menu-Only Placement
+- **260722-ln4n-auto-safe-name-conversion** — Automatic Safe-Name Conversion at Naming Entry Points
+- **260722-fc3b-ssh-host-fallback-open-logos** — SSH-Host Fallback + Open-Section Editor Logos
+- **260722-eo8e-accent-dock-icon** — Accent-Tinted PWA Dock Icon
+- **260722-d5q7-compose-strip-close-button** — Compose Strip Close Button
+- **260722-6d0f-navbar-open-in-app** — Navbar Open-in-App Button
+- **260721-x4sf-sessions-header-color-close-actions** — Sessions-Pane Server-Group Header — Color-Picker and Close Buttons
+- **260721-bylc-server-tile-diet-window-counts** — Server Tile Diet — Window Counts & Hover-Action Removal
+- **260721-1etw-instance-accent-host-color** — Per-Instance Accent Color (Host Color)
+- **260720-zx4i-board-route-pane-host-panels** — Board-Route PANE & HOST Panels
+- **260720-wb3n-github-source-patches-check** — GitHub-Source Backend for the incl.-Patches Update Check
+- **260720-rzg7-sessions-scope-toggle-delink** — Sessions-Pane Scope Toggle — Delink from SERVER Pane Expansion
+- **260720-n2ai-shll-check-updates-delegation-palette-checks** — Delegate Update Check to `shll check-updates` + Rework the Update Command Surface
+- **260720-ml7k-unified-toolbar-update-button** — Unified Toolbar Update Button
+- **260720-ji0k-pin-server-birth-cwd-home** — Pin rk-birthed tmux Server CWD to $HOME
+- **260720-ec6i-install-docs-policy-b** — Install Docs Policy B Conformance
+- **260720-ap63-hamburger-first-runkit-wordmark** — Top-Bar Left Cluster — Hamburger-First Reorder, Coarse Touch Target, RunKit Wordmark
 - **260730-op63-proxy-content-length-fix** — Proxy HTML Rewrite Content-Length Fix
 - **260807-2ept-pr-status-cold-start** — PR Status Cold-Start Latency + Batched Branch Derivation
 - **260722-73al-tip-tooltip-system** — App-Wide Tier-1 Tooltip System (`Tip` Component)

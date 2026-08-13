@@ -1,0 +1,3 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-08-13T02:18:56Z"}
+{"args":"Move Split H / Split V / Close Pane from the top bar to the Terminal tile title bar as per-kind content verbs (Option A distinction)","cmd":"fab-new","event":"command","ts":"2026-08-13T02:18:56Z"}
+{"delta":"+4.6","event":"confidence","score":4.6,"trigger":"calc-score","ts":"2026-08-13T02:20:29Z"}

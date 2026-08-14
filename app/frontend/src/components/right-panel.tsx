@@ -11,7 +11,7 @@ import {
  * docs/specs/surface-layout.md § Verbs — "Rail semantics change"). The panel
  * slot (surface mount + width drag, 260811-2r1w) is SUBSUMED by layout tiles —
  * the divider logic lives in `surface-layout.tsx` now; what remains of this
- * component is the fixed ~38px vertical rail on the terminal route's right
+ * component is the fixed 52px vertical rail on the terminal route's right
  * edge — rendered inside the Shell grid's full-height third column
  * (260812-nm4p), which the top-bar rail toggle collapses; layout tiles live in
  * the content column and survive a rail collapse. The file name and the
@@ -63,7 +63,13 @@ export function RightPanel({ available, open, onToggle }: RightPanelProps) {
   return (
     <div
       data-testid="right-panel-rail"
-      className="w-[38px] shrink-0 border-l border-border flex flex-col items-center py-1 gap-1"
+      // The rail is the top-bar cluster's vertical twin, so it maps the bar's
+      // spacing vocabulary axis-for-axis: 52px = 28px button + 12px inset each
+      // side (centering the w-7 buttons puts their right edge co-linear with
+      // the top-bar chips, which sit 12px from the window edge — one vertical
+      // seam down the right side); gap-3 = the bar's 12px inter-chip gap; and
+      // py-2 = the 8px the bar's chips keep from its own top/bottom edges.
+      className="w-[52px] shrink-0 border-l border-border flex flex-col items-center py-2 gap-3"
     >
       {shown.map((surface) => {
         const isOpen = open.includes(surface);

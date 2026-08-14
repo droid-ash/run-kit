@@ -1,11 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
 import { useModifierState, type ModifierSnapshot } from "@/hooks/use-modifier-state";
 import { useFocusedTerminal } from "@/contexts/focused-terminal-context";
 import { useChromeState } from "@/contexts/chrome-context";
 import { ArrowPad } from "@/components/arrow-pad";
 import { KBD_CLASS } from "@/components/kbd-chip";
 import { Tip, TipGroup } from "@/components/tip";
-import { focusComposeStrip } from "@/lib/compose-strip-events";
+import {
+  focusComposeStrip,
+  isComposeStripFocused,
+  subscribeComposeStripFocus,
+} from "@/lib/compose-strip-events";
 import { formatCombo } from "@/lib/keybindings";
 import { useKeybindings } from "@/hooks/use-keybindings";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -114,6 +118,13 @@ export function BottomBar({ onOpenCompose, onFocusTerminal, onScrollLockChange, 
   // Pointer gate for the compose hint (260811-0f3d): chords are noise on
   // touch — the § Education micro-copy coarse-pointer rule.
   const coarse = useCoarsePointer();
+  // Compose-focus signal (260814-ink6): the strip publishes its textarea's
+  // focus state to a module store so this sibling can self-gate — both
+  // footer mounts (app.tsx / board-page.tsx) inherit the hide with no wiring.
+  const composeFocused = useSyncExternalStore(
+    subscribeComposeStripFocus,
+    isComposeStripFocused,
+  );
 
   useEffect(() => {
     if (!fnOpen) return;
@@ -136,6 +147,13 @@ export function BottomBar({ onOpenCompose, onFocusTerminal, onScrollLockChange, 
   }, [fnOpen]);
 
   useEffect(() => {
+    // Detach while the compose textarea owns focus on a coarse pointer
+    // (260814-ink6): the render-time `return null` below hides the bar's UI
+    // but does NOT unmount this component or tear down its effects, so this
+    // capture-phase interceptor must self-gate on the same predicate — an
+    // armed modifier must never eat keystrokes typed into the compose
+    // textarea.
+    if (coarse && composeFocused) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (!mods.isArmed()) return;
       if (["Control", "Alt", "Meta", "Shift", "CapsLock"].includes(e.key)) return;
@@ -170,7 +188,7 @@ export function BottomBar({ onOpenCompose, onFocusTerminal, onScrollLockChange, 
 
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [mods, wsRef]);
+  }, [mods, wsRef, coarse, composeFocused]);
 
   const [termFocused, setTermFocused] = useState(false);
 
@@ -314,6 +332,15 @@ export function BottomBar({ onOpenCompose, onFocusTerminal, onScrollLockChange, 
     },
     [mods, send],
   );
+
+  // Hide while the compose strip's textarea owns focus on a coarse pointer
+  // (260814-ink6): the bar's keys send to the terminal and are dead weight
+  // mid-compose — the strip has its own input. Returning null hides the UI
+  // (unmounting the chip subtree) but NOT this component's own effects — the
+  // armed-modifier capture-phase keydown effect above therefore self-gates
+  // on the same predicate so it cannot intercept keystrokes typed into the
+  // compose textarea. Blur — or the strip unmounting — restores the bar.
+  if (coarse && composeFocused) return null;
 
   return (
     // TipGroup: the chip row is one warm-tip cluster (260723-fm08). Living

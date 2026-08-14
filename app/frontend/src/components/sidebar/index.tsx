@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, useReducer, memo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
-import { killSession as killSessionApi, killWindow as killWindowApi, renameSession, moveWindow, moveWindowToSession, setSessionColor as setSessionColorApi, setWindowColor as setWindowColorApi, setWindowMarker as setWindowMarkerApi, getAllServerColors, setServerColor as setServerColorApi, setSessionOrder, type ServerInfo } from "@/api/client";
+import { killSession as killSessionApi, killWindow as killWindowApi, renameSession, moveWindow, moveWindowToSession, setSessionColor as setSessionColorApi, setWindowColor as setWindowColorApi, setWindowMarker as setWindowMarkerApi, setWindowFlair as setWindowFlairApi, setSessionFlair as setSessionFlairApi, getAllServerColors, setServerColor as setServerColorApi, setSessionOrder, type ServerInfo } from "@/api/client";
 import { useSessionContext, useUpdateNotification } from "@/contexts/session-context";
 import { useFocusedPane } from "@/contexts/focused-pane-context";
 import { resolveFocusedWindow, thinWindowFromFocusedPane } from "@/lib/focused-pane-window";
@@ -1437,6 +1437,22 @@ export function Sidebar({
     );
   }, [addToast]);
 
+  // Persist a window's flair state. The Label picker's flair section passes
+  // the EXACT picked state ("" → null clears) — this only writes it. Mirrors
+  // handleWindowMarkerChange.
+  const handleWindowFlairChange = useCallback((server: string, _session: string, windowId: string, flair: string | null) => {
+    setWindowFlairApi(server, windowId, flair).catch((err) =>
+      addToast(err.message || "Failed to set window flair"),
+    );
+  }, [addToast]);
+
+  // Persist a session's flair state. Mirrors handleSessionColorChange.
+  const handleSessionFlairChange = useCallback((server: string, name: string, flair: string | null) => {
+    setSessionFlairApi(server, name, flair).catch((err) =>
+      addToast(err.message || "Failed to set session flair"),
+    );
+  }, [addToast]);
+
   // Server color write seam — the SINGLE implementation both the SERVER-panel
   // tiles and the session-tree group headers funnel through (x4sf): optimistic
   // `serverColors` update (the local repaint — server user-option mutations
@@ -1619,6 +1635,8 @@ export function Sidebar({
                 onKillServer={onKillServer}
                 onWindowColorChange={handleWindowColorChange}
                 onWindowMarkerChange={handleWindowMarkerChange}
+                onSessionFlairChange={handleSessionFlairChange}
+                onWindowFlairChange={handleWindowFlairChange}
                 onForkWindow={onForkWindow}
                 onWindowDragStart={handleDragStart}
                 onWindowDragOver={handleDragOver}
@@ -1985,6 +2003,11 @@ type ServerGroupProps = {
   onKillServer: (name: string) => void;
   onWindowColorChange: (server: string, session: string, windowId: string, color: string | null) => void;
   onWindowMarkerChange: (server: string, session: string, windowId: string, marker: string | null) => void;
+  /** Flair write seams — the picker's flair section funnels through these.
+   *  The session one mirrors its color counterpart; the window one mirrors
+   *  `onWindowMarkerChange`. Stable identity-arg callbacks. */
+  onSessionFlairChange: (server: string, name: string, flair: string | null) => void;
+  onWindowFlairChange: (server: string, session: string, windowId: string, flair: string | null) => void;
   /** Forwarded to each `WindowRow` → its row flyout's fork affordance. Optional
    *  (the board-route sidebar passes none) — see `SidebarProps.onForkWindow`. */
   onForkWindow?: (server: string, windowId: string) => Promise<void>;
@@ -2059,6 +2082,8 @@ function ServerGroupInner(props: ServerGroupProps) {
     onKillServer,
     onWindowColorChange,
     onWindowMarkerChange,
+    onSessionFlairChange,
+    onWindowFlairChange,
     onForkWindow,
     onWindowDragStart,
     onWindowDragOver,
@@ -2293,7 +2318,7 @@ function ServerGroupInner(props: ServerGroupProps) {
           selected fill + brighter text; inactive rests at the base fill with
           the guarded accent text and deepens on hover. */}
       <div
-        className="group flex items-stretch w-full transition-colors"
+        className="group relative flex items-stretch w-full transition-colors"
         aria-current={isCurrent ? "true" : undefined}
         data-current-server={isCurrent ? "true" : undefined}
         data-server={server}
@@ -2460,6 +2485,7 @@ function ServerGroupInner(props: ServerGroupProps) {
               draggable={false}
               onColorChange={onWindowColorChange}
               onMarkerChange={onWindowMarkerChange}
+              onFlairChange={onWindowFlairChange}
               onForkWindow={onForkWindow}
             />
           )}
@@ -2532,6 +2558,7 @@ function ServerGroupInner(props: ServerGroupProps) {
                     onDragLeave={onSessionDragLeave}
                     onDrop={onSessionDrop}
                     onColorChange={onSessionColorChange}
+                    onFlairChange={onSessionFlairChange}
                     onSpawnAgent={onSpawnAgent}
                   />
 
@@ -2622,6 +2649,7 @@ function ServerGroupInner(props: ServerGroupProps) {
                             onDragEnd={ghost ? undefined : onWindowDragEnd}
                             onColorChange={ghost ? undefined : onWindowColorChange}
                             onMarkerChange={ghost ? undefined : onWindowMarkerChange}
+                            onFlairChange={ghost ? undefined : onWindowFlairChange}
                             onForkWindow={ghost ? undefined : onForkWindow}
                           />
                         );

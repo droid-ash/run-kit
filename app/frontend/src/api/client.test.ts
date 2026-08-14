@@ -26,6 +26,8 @@ import {
   setInstanceName,
   setWindowColor,
   setWindowRole,
+  setWindowFlair,
+  setSessionFlair,
   updateWindowUrl,
   updateWindowType,
   triggerUpdate,
@@ -602,6 +604,41 @@ describe("POST verb migration + /options contract", () => {
     expect(bodies[0].options).toEqual({ "@rk_role": "operator" });
     expect(bodies[1].options).toEqual({ "@rk_role": "" });
     expect(bodies[2].options).toEqual({ "@rk_role": "" });
+  });
+
+  it("setWindowFlair POSTs /options with @rk_flair; null and empty string both clear", async () => {
+    const bodies: Array<{ options?: Record<string, string | null> }> = [];
+    mswServer.use(
+      http.post("/api/windows/:windowId/options", async ({ request }) => {
+        bodies.push((await request.json()) as { options?: Record<string, string | null> });
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    await setWindowFlair("s", "@1", "nyan");
+    await setWindowFlair("s", "@1", null);
+    await setWindowFlair("s", "@1", "");
+    expect(bodies[0].options).toEqual({ "@rk_flair": "nyan" });
+    expect(bodies[1].options).toEqual({ "@rk_flair": "" });
+    expect(bodies[2].options).toEqual({ "@rk_flair": "" });
+  });
+
+  it("setSessionFlair POSTs /api/sessions/{session}/flair with {flair}; null clears", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    const bodies: Array<{ flair?: string | null }> = [];
+    mswServer.use(
+      http.post("/api/sessions/:session/flair", async ({ request }) => {
+        capturedUrl = request.url;
+        capturedMethod = request.method;
+        bodies.push((await request.json()) as { flair?: string | null });
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    await setSessionFlair("default", "alpha", "naruto");
+    await setSessionFlair("default", "alpha", null);
+    expect(capturedMethod).toBe("POST");
+    expect(capturedUrl).toMatch(/\/api\/sessions\/alpha\/flair\?server=default$/);
+    expect(bodies).toEqual([{ flair: "naruto" }, { flair: null }]);
   });
 
   it("updateWindowType POSTs /options with @rk_type; empty string maps to null (unset)", async () => {

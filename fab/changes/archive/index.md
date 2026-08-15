@@ -1,5 +1,32 @@
 # Archived Changes
 
+- **260814-z4x1-reduce-code-comment-density** — Reduce Code Comment Density
+- **260814-qb8z-server-url-tmux-option** — Server URL via tmux Option
+- **260814-mx8e-install-policy-a-binary-audit** — Install-Composition Policy A Binary-Half Audit
+- **260814-ldbs-shell-stage-status-bar** — Shell Stage + Status Bar — the Composed Frame
+- **260814-ink6-mobile-compose-collapse-newline-chip** — Mobile Compose Strip — Coarse-Pointer Collapse + Local-Newline Chip
+- **260814-gyt1-dead-code-cleanup-sweep** — Dead-Code Cleanup Sweep
+- **260814-gxh9-extract-per-row-channel-seams** — Extract Per-Row Channel Seams
+- **260814-d4wu-raw-accent-report-channel** — Raw Accent Report Channel
+- **260814-6b0j-top-bar-panel-retirement** — Top-Bar & Panel Retirement Sweep
+- **260814-2esh-sidebar-character-row-animations** — Sidebar Character Row Animations (Nyan Cat, Naruto, One Piece)
+- **260813-z84r-swap-web-compose-glyphs** — Swap Web Surface Glyph and Compose Chip Face
+- **260813-w1lf-terminal-tile-content-verbs** — Terminal Tile Content Verbs
+- **260813-oid2-own-code-server-install** — Own the code-server Install
+- **260813-kvk7-dashboard-chrome-nitpick-polish** — Dashboard Chrome Nitpick Polish
+- **260813-j3jb-compose-tile-dock-drop-zoom-chord** — Compose Strip Tile Dock + Ctrl+` Removal
+- **260813-ifya-operator-role-pinned-row** — Operator Role Pinned Row
+- **260813-if5d-latch-code-surface-folder** — Latch Code-Surface Folder at First Open
+- **260813-becu-rk-present-attach-verb** — `rk present` — one-verb "show this to the user" + skill page rewrite
+- **260813-b41g-scope-daemon-socket-reap** — Scope the Daemon Socket Reap to the Daemon Session
+- **260813-4n9h-persistent-job-windows** — Persistent Job Windows
+- **260813-2s4u-respawn-aware-code-server-install** — Respawn-aware `rk code-server install`
+- **260813-1i7j-host-switcher-color-reorder-waiting** — Desktop-Shell Host-Switcher Menu — Per-Host Accent Color, Manual Reorder, Per-Host Waiting Counts
+- **260812-wfic-surface-titlebar-redesign-shortcut-scoping** — Surface Tile Title-Bar Redesign + tty-Scoped tmux Shortcuts
+- **260812-fryz-compose-strip-pane-alignment** — Compose Strip Pane Alignment
+- **260812-anac-fix-job-window-probe-fallback** — Fix Job-Window Probe Fallback
+- **260812-7a58-condense-agent-setup-consent-output** — Condense agent-setup Consent Output
+- **260812-0c6o-retire-view-rows-demote-chat** — Retire View Rows, Demote Chat, Rebind Ctrl+`
 - **260814-011r-gap-seam-tile-chrome** — Gap-Seam Tile Chrome
 - **260812-z1ya-update-daemon-tmux-window** — Update Runs in a Daemon-Managed tmux Window
 - **260812-nm4p-top-bar-rail-toggle** — Top-Bar Right-Rail Toggle

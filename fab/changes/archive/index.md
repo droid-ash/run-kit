@@ -1,5 +1,13 @@
 # Archived Changes
 
+- **260815-xb77-row-popup-identity-titlebars** — Identity Title Bars on Sidebar Row Hover Popups
+- **260815-r2wp-agent-family** — The rk agent family — `agent setup` / `agent hook`
+- **260815-mi5s-mux-guard-move** — Mux Guard Move (CLI Layering Part 4)
+- **260815-ltz7-restore-window-focus-steal-guard** — Restore Window Focus with Code-Server Steal Guard
+- **260815-lsgf-mux-consolidation-low-risk** — Low-Risk Mux Consolidation (CLI Layering Part 3)
+- **260815-g08a-stage-bottom-gap-parity** — Stage Bottom-Gap Parity
+- **260815-a5vf-rk-send-await-agent-messaging** — rk send + rk await — agent-to-agent messaging verbs
+- **260815-41t9-web-tile-iframe-click-focus** — Web Tile Iframe Click Focus
 - **260815-19me-composed-frame-unification** — Composed-Frame Unification
 - **260814-z4x1-reduce-code-comment-density** — Reduce Code Comment Density
 - **260814-qb8z-server-url-tmux-option** — Server URL via tmux Option

@@ -25,6 +25,7 @@
 | [Agent State](agent-state.md) | The `@rk_agent_state` pane-option convention — two-tier ownership, value schema, writer/reader rules, shell reconciler, and the `rk agent-setup` per-agent hook registry (cross-repo contract with fab-kit) |
 | [API](api.md) | HTTP, SSE, and WebSocket endpoint specification — the target API surface |
 | [Architecture](architecture.md) | System architecture, repository structure, data flow, build & deploy |
+| [CLI Layering](cli-layering.md) | Two-tool model — rk owns the tmux/agent substrate, fab owns pipeline choreography: delegation rules, the `rk mux`/`rk agent` grouping plan, hidden plumbing, the `fab pane` migration map, and the 8-part phased execution plan |
 | [Project Plan](project-plan.md) | 4-phase reimplementation plan: scaffold → backend → frontend → cleanup |
 | [Right Panel](right-panel.md) | Collapsible right panel on the terminal route — a second (substrate, lens) slot behind an icon rail: surface registry (web/code/agents), the `code` lens (code-server embed, git-root keyed), the `@rk_owner` companion-window convention, mobile sheet degradation, phasing |
 | [Design Philosophy](design.md) | Core design principles and mental models behind fab-kit |

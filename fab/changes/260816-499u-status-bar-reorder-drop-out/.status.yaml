@@ -1,0 +1,56 @@
+id: 499u
+name: 260816-499u-status-bar-reorder-drop-out
+created: 2026-08-16T06:29:08Z
+created_by: sahil-noon
+change_type: refactor
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: done
+plan:
+    generated: true
+    task_count: 5
+    acceptance_count: 9
+    acceptance_completed: 9
+confidence:
+    certain: 8
+    confident: 1
+    tentative: 0
+    unresolved: 0
+    score: 4.7
+    fuzzy: true
+    dimensions:
+        signal: 83.3
+        reversibility: 89.4
+        competence: 89.4
+        disambiguation: 86.1
+stage_metrics:
+    intake: {started_at: "2026-08-16T06:29:08Z", driver: fab-new, iterations: 1, completed_at: "2026-08-16T06:33:48Z"}
+    apply: {started_at: "2026-08-16T06:33:48Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T06:40:04Z"}
+    review: {started_at: "2026-08-16T06:40:04Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T06:44:49Z"}
+    hydrate: {started_at: "2026-08-16T06:44:49Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T06:47:10Z"}
+    ship: {started_at: "2026-08-16T06:47:10Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-16T06:48:46Z"}
+    review-pr: {started_at: "2026-08-16T06:48:46Z", driver: git-pr, iterations: 1, completed_at: "2026-08-16T06:54:27Z"}
+prs:
+    - https://github.com/sahil87/run-kit/pull/630
+true_impact:
+    added: 393
+    deleted: 82
+    net: 311
+    excluding:
+        added: 93
+        deleted: 76
+        net: 17
+    tests:
+        added: 13
+        deleted: 9
+        net: 4
+    computed_at: "2026-08-16T06:48:47Z"
+    computed_at_stage: ship
+summary: Status bar left cluster reordered to branch-first descending relevance (git → pr → fab → agt → tmx → cwd); the out register deleted from the bar (segment, menu row, per-second clock) with getOutputLine retained for the PANE panel and flyout card
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-08-16T06:54:27Z

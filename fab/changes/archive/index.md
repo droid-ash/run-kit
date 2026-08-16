@@ -1,5 +1,9 @@
 # Archived Changes
 
+- **260816-499u-status-bar-reorder-drop-out** — Status-Bar Segment Reorder + `out` Register Removal
+- **260815-wkcw-present-auto-expand-web-tile** — Present Auto-Expand Web Tile
+- **260815-wdr4-shll-update-yes-flag** — Dashboard update job — append `--yes` to the shll update argv
+- **260815-82w7-mux-substrate-twins** — Mux Substrate Twins (capture / kill / process)
 - **260815-xb77-row-popup-identity-titlebars** — Identity Title Bars on Sidebar Row Hover Popups
 - **260815-r2wp-agent-family** — The rk agent family — `agent setup` / `agent hook`
 - **260815-mi5s-mux-guard-move** — Mux Guard Move (CLI Layering Part 4)

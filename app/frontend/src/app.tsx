@@ -938,16 +938,19 @@ function AppShell() {
   // an OPEN surface closes its tile (closeSurface — arity
   // collapses), a closed one appends a tile (addSurface — 1→2 `split-h`,
   // 2→3 `main-left`). A disallowed mutation (closing the last tile, adding a
-  // fourth) is a null no-op. Stable across SSE ticks. Shared by the top-bar
-  // surface-toggle group, the tile verbs, and the palette. Acts on the
-  // RENDERED layout (260815-wkcw) so a transiently auto-opened web tile
-  // toggles closed here exactly like a manually opened one.
+  // fourth) is a null no-op; the boolean return reports whether the mutation
+  // applied (focus-hop's open-then-focus flag depends on it). Stable across
+  // SSE ticks. Shared by the top-bar surface-toggle group, the tile verbs,
+  // and the palette. Acts on the RENDERED layout (260815-wkcw) so a
+  // transiently auto-opened web tile toggles closed here exactly like a
+  // manually opened one.
   const togglePanel = useCallback(
     (surface: SurfaceName) => {
       const next = renderLayout.order.includes(surface)
         ? closeSurface(renderLayout, surface)
         : addSurface(renderLayout, surface);
       if (next) applyLayout(next);
+      return next !== null;
     },
     [renderLayout, applyLayout],
   );
@@ -1003,6 +1006,18 @@ function AppShell() {
     ? mobileActiveTile
     : (reportedFocusedKind ?? layout.order[0]);
   const layoutFocusTileRef = useRef<((kind: SurfaceKind) => void) | null>(null);
+
+  // focus-hop's open-then-focus: when the hop opened a CLOSED code tile, this
+  // flag makes the effect below focus it once the tile lands in the layout
+  // (SurfaceLayout's focusTileRef closure re-registers with the new order —
+  // child effects run before this parent one).
+  const focusCodeOnLandingRef = useRef(false);
+  useEffect(() => {
+    if (focusCodeOnLandingRef.current && renderLayout.order.includes("code")) {
+      focusCodeOnLandingRef.current = false;
+      layoutFocusTileRef.current?.("code");
+    }
+  }, [renderLayout]);
 
   // Focus restore + steal guard (spec right-panel.md § The code lens): the
   // tile grid REMOUNTS on every window switch (the `${server}:${windowId}`
@@ -1093,7 +1108,7 @@ function AppShell() {
   // spike, intake k3vp §5; tty-scoped carve-out 260812-wfic R9): a keydown
   // inside the same-origin code-server iframe is reclaimed exactly when it
   // matches an ENABLED NON-`ttyOnly` registry binding — so run-kit's chords
-  // (palette, view-cycle, panel-toggle, …) survive iframe focus while both
+  // (palette, view-cycle, code-toggle, …) survive iframe focus while both
   // the embedded app's OWN Ctrl/⌘ chords AND the tmux-pane split pair (a
   // keydown inside the iframe means the code tile owns focus) pass through
   // to code-server's keybinding service.
@@ -2861,13 +2876,14 @@ function AppShell() {
       // Shape` (the `layout-cycle` chord's body — its id IS the registry
       // actionId, so `withShortcutHints` decorates it with the effective ⌘;
       // combo). These REPLACE the retired `Panel: Web`/`Panel: Code` entries —
-      // the layout model subsumes the panel; the ⇧⌘. `panel-toggle` chord
-      // (first non-tty tile) is documented via the target surface's Add/Close
-      // entry hint. The gating + labels live in the pure `buildLayoutActions`
-      // (lib/palette-layout.ts), the `buildViewActions` precedent. The entries
+      // the layout model subsumes the panel. The gating + labels live in the
+      // pure `buildLayoutActions` (lib/palette-layout.ts), the
+      // `buildViewActions` precedent. The entries
       // act on the RENDERED layout (260815-wkcw) — a transiently auto-opened
       // web tile offers `Layout: Close Web`, and closing it records the
-      // dismissal latch through `applyLayout`.
+      // dismissal latch through `applyLayout`. The `code-toggle` chord (⌘J /
+      // ⇧Ctrl+J) is documented via the code surface's Add/Close entry hint
+      // (the `toggleTarget`/`toggleShortcut` seam; enabled-else-undefined).
       ...(windowParam
         ? buildLayoutActions(renderLayout, panelSurfaces, {
             zoomed: layoutZoomed,
@@ -2881,9 +2897,9 @@ function AppShell() {
             onFocus: !isMobile
               ? (kind: SurfaceKind) => layoutFocusTileRef.current?.(kind)
               : undefined,
-            toggleTarget: panelSurfaces.find((s) => s !== "tty") ?? null,
+            toggleTarget: panelSurfaces.includes("code") ? "code" : null,
             toggleShortcut: (() => {
-              const b = bindingByAction.get("panel-toggle");
+              const b = bindingByAction.get("code-toggle");
               return b?.enabled ? formatCombo(b, bindingHost.platform) : "";
             })(),
           })
@@ -3403,16 +3419,36 @@ function AppShell() {
       // still bounces the chord out of the xterm pane to this dispatcher.
       "split-horizontal": ttyGated("split-horizontal"),
       "split-vertical": ttyGated("split-vertical"),
-      // ⇧⌘. panel toggle (260811-2r1w, generalized in 260811-k3vp) — retargeted
-      // to the layout model in 260812-ab5v: toggles the first NON-TTY available
-      // surface's TILE via addSurface/closeSurface (through `togglePanel`).
-      // Its gating (desktop window route + ≥1 available non-tty surface) gates
-      // the chord for free.
-      "panel-toggle":
-        windowParam && !isMobile && panelSurfaces.some((s) => s !== "tty")
+      // ⌘J/⇧Ctrl+J code toggle — the code surface's dedicated tile chord (VS
+      // Code's ⌘J panel analog), toggling the tile via addSurface/
+      // closeSurface (through `togglePanel`). Its gating (desktop window
+      // route + the code surface available) gates the chord for free: a
+      // window with no code lens mounts no handler and the chord falls
+      // through untouched.
+      "code-toggle":
+        windowParam && !isMobile && panelSurfaces.includes("code")
+          ? () => togglePanel("code")
+          : undefined,
+      // ⌃`/⇧Ctrl+` focus hop (VS Code's ⌃` gesture): tty↔code through the
+      // `Layout: Focus <Surface>` focus-by-kind seam. Hopping TO tty records
+      // `tty` via that seam's `recordTtySlot`; hopping to code writes NO
+      // focus memory (the recording asymmetry — only in-frame `onInteract`
+      // records `code`). A closed-but-available code tile opens first
+      // (open-then-focus), focused once the layout lands. Same gate as
+      // code-toggle.
+      "focus-hop":
+        windowParam && !isMobile && panelSurfaces.includes("code")
           ? () => {
-              const first = panelSurfaces.find((s) => s !== "tty");
-              if (first) togglePanel(first);
+              if (focusedTileKind === "code") {
+                layoutFocusTileRef.current?.("tty");
+              } else if (renderLayout.order.includes("code")) {
+                layoutFocusTileRef.current?.("code");
+              } else if (togglePanel("code")) {
+                // Flag only an APPLIED open: a full 3-tile layout refuses the
+                // add (null no-op), and a stuck flag would auto-focus code
+                // whenever a later unrelated action opens it.
+                focusCodeOnLandingRef.current = true;
+              }
             }
           : undefined,
       // ⌘; layout-shape cycle (260812-ab5v R9) — the ▦ chip's chord: the next
@@ -3421,7 +3457,7 @@ function AppShell() {
       // ring) gates the chord for free.
       "layout-cycle": fromPalette("layout-cycle"),
     };
-  }, [paletteActions, paletteGlobals, currentSession, windowParam, navigateToWindow, macros, sessionName, executeMacro, toggleComposeStrip, addToast, isMobile, panelSurfaces, togglePanel, bindingByAction, focusedTileKind, layout]);
+  }, [paletteActions, paletteGlobals, currentSession, windowParam, navigateToWindow, macros, sessionName, executeMacro, toggleComposeStrip, addToast, isMobile, panelSurfaces, togglePanel, bindingByAction, focusedTileKind, renderLayout, layout]);
   useKeybindingDispatch(keybindingHandlers);
 
   const displayName = currentWindow?.name ?? windowParam ?? "";

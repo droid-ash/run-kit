@@ -682,10 +682,11 @@ describe("Pin/Kill action rows (ys3q)", () => {
     expect(color.compareDocumentPosition(fork) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(fork.compareDocumentPosition(pin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(pin.compareDocumentPosition(kill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // One section with a top border off the registers block; touch height on
-    // coarse, ~28px on fine pointers.
+    // One section with hairlines between its rows; touch height on coarse,
+    // ~28px on fine pointers. This fixture has no change and no PR, so the
+    // section is flush against the title bar and carries no top border of its
+    // own — the two tests above own that split.
     const section = fork.parentElement!;
-    expect(section.className).toContain("border-t");
     expect(section.className).toContain("divide-y");
     expect(section).toContainElement(color);
     expect(section).toContainElement(pin);
@@ -746,6 +747,33 @@ describe("flyout card elevation + action tray", () => {
     expect(tray.className).toContain("bg-bg-inset");
     expect(tray.className).toContain("rounded-b-[5px]");
     expect(tray.className).toContain("-mb-1.5");
+  });
+
+  // Without a body the title bar's mb-0.5 and the card's gap-1 would leave 6px
+  // of the card's lighter ground between two inset bands — a grey bar with
+  // nothing in it. `flush` pulls the tray up over that space, and drops its
+  // own border-t so the title bar's border-b is the single divider.
+  it("a body-less card butts the tray against the title bar with one divider", () => {
+    render(<Row win={makeWindow({})} onPinAction={() => {}} />);
+    hoverOpen();
+    const tray = screen.getByTestId("row-flyout-actions");
+    expect(tray.className).toContain("-mt-1.5");
+    expect(tray.className).not.toContain("border-t");
+    expect(tray.className).not.toContain("mt-1 ");
+  });
+
+  it("a card with a body keeps the tray's own top border and spacing", () => {
+    render(
+      <Row
+        win={makeWindow({ fabChange: "260817-kabi-hover-card-change-only", fabStage: "review" })}
+        onPinAction={() => {}}
+      />,
+    );
+    hoverOpen();
+    expect(screen.getByTestId("row-flyout-fab")).toBeInTheDocument();
+    const tray = screen.getByTestId("row-flyout-actions");
+    expect(tray.className).toContain("border-t");
+    expect(tray.className).not.toContain("-mt-1.5");
   });
 
   it("action rows read primary at rest and the rail color rides the danger seam", () => {

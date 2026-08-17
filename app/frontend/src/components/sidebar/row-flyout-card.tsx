@@ -425,11 +425,21 @@ const ACTION_ROW_HINT_CLASS = "ml-auto min-w-0 truncate pl-2 text-text-secondary
 
 /** The card's sectioned action list — the `-mx-2` counter-inset (the title
  *  bar's idiom) lets the top border + inter-row hairlines span the card edge
- *  to edge. Shared by all three card tiers. */
-export function CardActionList({ children }: { children: ReactNode }) {
+ *  to edge. Shared by all three card tiers.
+ *
+ *  `flush` is for a card with NO body between the title bar and this list.
+ *  The 6px it removes is not padding — it is the title bar's `mb-0.5` plus the
+ *  card's `gap-1`, both of which exist to hold a body apart from the two inset
+ *  bands. With no body they leave a strip of the card's lighter ground between
+ *  two darker ones, reading as an unexplained grey bar. Dropping `border-t`
+ *  with it is required, not cosmetic: at zero gap the title bar's own
+ *  `border-b` already sits there, and keeping both would double the rule. */
+export function CardActionList({ children, flush = false }: { children: ReactNode; flush?: boolean }) {
   return (
     <div
-      className="-mx-2 -mb-1.5 mt-1 rounded-b-[5px] bg-bg-inset border-t border-border divide-y divide-border"
+      className={`-mx-2 -mb-1.5 rounded-b-[5px] bg-bg-inset divide-y divide-border ${
+        flush ? "-mt-1.5" : "mt-1 border-t border-border"
+      }`}
       data-testid="row-flyout-actions"
     >
       {children}
@@ -595,6 +605,9 @@ export function WindowFlyoutContent({
   // shape), while the PANE panel keeps the full segment text unchanged.
   const healthText = prParts?.health.map((seg) => seg.text.replace(/^review: /, "")).join(" · ");
   const fetchedAtEpoch = prFetchedAtEpoch(win);
+  // Drives both the body block and the action list's `flush` spacing — they
+  // must agree, or the card grows a gap with nothing in it.
+  const hasBody = Boolean(fabParts || prParts);
   // The fork row keeps the DOUBLE gate: a forkable window AND a wired handler.
   // Derived as a narrowed handler (not a boolean) so the ForkActionRow call
   // site type-checks structurally instead of leaning on aliased-condition
@@ -631,7 +644,7 @@ export function WindowFlyoutContent({
           Critical tokens lead; expendable values continue on indented lines.
           No body block at all when both resolvers are null (a bare `prUrl`
           without a `prNumber` is not content). */}
-      {(fabParts || prParts) && (
+      {hasBody && (
         <>
           {fabParts && (
             <>
@@ -708,7 +721,7 @@ export function WindowFlyoutContent({
           wiring no handler renders no row. All rows stopPropagation so an
           action never selects the underlying row (the PR-link/docs idiom). */}
       {(onChangeColorAction || forkHandler || onPinAction || onKillAction) && (
-        <CardActionList>
+        <CardActionList flush={!hasBody}>
           {onChangeColorAction && (
             <CardActionRow
               icon={<PaletteIcon />}

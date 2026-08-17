@@ -7,8 +7,11 @@ status-detail surface that replaced the per-dot `StatusDotTip` hover-card
 (whose `status-dot-tip.spec.ts` this file replaces): the card opens on
 whole-row hover at a fixed x (the sidebar's right edge) on fine pointers and
 BELOW the row (`bottom-start`, width-capped short of the rail) on coarse
-pointers, on keyboard row focus, and on coarse-pointer rail-tap/dot-tap; it
-carries the four-register view plus the PR/docs links; a window with an owned
+pointers, on keyboard row focus, and on coarse-pointer rail-tap/dot-tap; its
+body is the `fab` and `pr` registers only — critical tokens lead (`id · stage
+· state`, the anchored PR identity), long values continue on indented lines,
+freshness lives inside the pr group, and a window with neither a change nor a
+PR renders no body at all — plus the PR/docs links; a window with an owned
 PR shows a rest-state git-pull-request glyph that swaps for the pin/✕ actions
 on hover (fine pointers) and lives in the rail's fixed 16px slot on coarse. It
 also covers the card's **sectioned action rows** — change color / fork / pin /
@@ -46,17 +49,19 @@ width at ≈16px).
       (`prNumber: 386`, `prUrl`, `prState: open`, `prChecks: pass`,
       `prReview: approved`, fresh `prFetchedAt`) → blue
       "building — active — agent waiting 3m" dot (the PR never owns the dot —
-      compositional vocabulary), rest PR glyph, full four-register card, fork
+      compositional vocabulary), rest PR glyph, the fab + pr register card
+      (slug, health and freshness on continuation lines), fork
       action row, and a two-pane list (`%425` active) so the identity title bar
       renders its full `Window @1 · pane %425 · 2 panes` form.
     - `@2` "scratch-shell" — plain window → gray "idle" dot, no glyph,
-      out-register-only card, no fork row, no panes (the title bar degrades to
+      a body-less card (title bar + action rows only), no fork row, no panes
+      (the title bar degrades to
       `Window @2`); carries `color: orange` + `marker: solid` so the coarse
       left-zone-reclaim test can prove the display-only stripe survives the
       interactive zone's removal.
 - Rows are located by `[role='treeitem'][data-window-id]`; the card by
-  `data-testid="row-flyout-card"`; registers/links by `row-flyout-out|agt|fab|
-  pr|checked|pr-link|docs-link`; the card's sectioned action rows by
+  `data-testid="row-flyout-card"`; registers/links by `row-flyout-fab|fab-slug|
+  pr|pr-health|checked|pr-link|docs-link`; the card's sectioned action rows by
   `row-flyout-color-action` / `row-flyout-fork-action` /
   `row-flyout-pin-action` / `row-flyout-kill-action` (+ `row-flyout-spawn-action`
   / `row-flyout-create-action` on the session/server tiers);
@@ -78,14 +83,19 @@ anchored at the sidebar's right edge and vertically aligned to the hovered row.
 Its first element is the **identity title bar** (`Window @1 · pane %425 · 2
 panes` — the tmux window id, the active pane's id, and the pane count, in the
 inset-bar treatment), carrying ONLY the docs link on its right edge (fork is
-gone from the title bar — one affordance, one home); the dot label is demoted
-to the first body line, followed by the four registers
-(`out`/`agt`/`fab`/`pr`), the "checked Xs ago" freshness line, and the PR link.
+gone from the title bar — one affordance, one home); the body is the `fab` and
+`pr` registers ONLY — no status-label line, no `out`, no `agt` (the row
+already carries the name, dot, glyph and label). The `fab` register leads with
+its decisive tokens (`93dy · apply · active`) and the slug continues on an
+indented line; the `pr` register splits into the anchored identity line and a
+plain-text health continuation, with the "checked Xs ago" freshness line
+inside the pr group.
 The card's bottom carries the **sectioned action rows** in the fixed
 change-color → fork → pin → kill order (`Change color…` first — 260817-ve5m),
 each with its sub-hint ("new window, same directory" /
-pin-state / "confirms first"). The `pr` register line is itself the open-first
-anchor (the panel's PrLinkRow idiom): it wraps the colored segments, ends in an
+pin-state / "confirms first"). The `pr` identity line is itself the open-first
+anchor (the panel's PrLinkRow idiom): it wraps the colored identity segments,
+ends in an
 always-visible inline `↗`, and opens the PR in a new tab
 (`noopener noreferrer`).
 
@@ -93,15 +103,18 @@ always-visible inline `↗`, and opens the PR in a new tab
 1. Hover the `@1` row; assert the card is visible.
 2. Assert the title bar contains "Window @1 · pane %425 · 2 panes", holds the
    docs link, and contains NO fork affordance; assert the title text precedes
-   the dot-label text ("building — active — agent waiting 3m" — hue word +
-   status word + waiting suffix, no PR words) in the card, and each register
-   testid shows its expected content (`waiting 3m`, the fab id·slug·stage·state
-   line, `#386`, the freshness line).
+   the `fab` register text, the card does NOT contain the dot label
+   ("building — active"), the `row-flyout-out`/`row-flyout-agt` testids are
+   absent, the fab register reads `93dy · apply · active` with the slug on its
+   continuation line, the pr register shows `#386` with
+   `checks pass · approved` on the health continuation, and the freshness line
+   renders.
 3. Assert the sectioned action rows: change color ("Change color…"), fork
    ("Fork conversation" / "new window,
    same directory"), pin ("Pin to board…" / "not pinned"), kill ("Kill window"
    / "confirms first"), in that vertical order (bounding-box y).
-4. Assert the pr-register anchor wraps the segments (`#386`, `↗`), carries
+4. Assert the pr-register anchor wraps the identity segments (`#386`, `↗`),
+   carries
    the "Open PR #386 in a new tab" aria-label + href/target/rel, and the docs
    link href.
 5. Assert the row-aligned notch: the card's arrow SVG is present and its
@@ -110,21 +123,23 @@ always-visible inline `↗`, and opens the PR in a new tab
 6. Compare bounding boxes: the card's x ≥ the sidebar `<aside>`'s right edge,
    and the card vertically overlaps the hovered row (±8px).
 7. Assert no line paints outside the `max-w-xs` card box: the card's
-   `scrollWidth` does not exceed its `clientWidth` (the long mocked fab
-   register would overflow without the register lines' `truncate`).
+   `scrollWidth` does not exceed its `clientWidth` (the register and
+   continuation lines' `truncate` keeps content inside the box).
 
 ### `moving between rows retargets the card (warm window, single card)`
 
 **What it proves:** sweeping the pointer to a sibling row closes the first card
 and opens the sibling's (the shared warm-window delay scope) — only one card
 exists at a time, and the content follows the hovered row (the scratch row's
-card has no PR link). It also proves the title's **degradation**: the pane-less
+card has no body at all — no change, no PR — so no fab register and no PR
+link). It also proves the title's
+**degradation**: the pane-less
 scratch window's title bar reads `Window @2` alone, with no pane segment.
 
 **Steps:**
-1. Hover `@1`; assert the card shows "building — active".
-2. Hover `@2`; assert exactly one card exists, containing "idle", with zero
-   PR links, and its title bar reads "Window @2" without any "pane" segment.
+1. Hover `@1`; assert the card shows the pr register (`#386`).
+2. Hover `@2`; assert exactly one card exists, its title bar reads "Window @2"
+   without any "pane" segment, and the fab register and PR link are absent.
 
 ### `the fork action row renders only on a claude-chat row and POSTs the fork endpoint`
 
@@ -138,7 +153,7 @@ is derived server-side — without selecting or navigating the underlying row.
 1. Hover `@1` (the claude-chat window); assert the fork action row is visible
    and its `title` mentions "same directory".
 2. Hover `@2` (a plain shell window, no `chatProvider`); assert the card is the
-   scratch one ("idle") and carries zero fork rows.
+   scratch one ("Window @2", no body) and carries zero fork rows.
 3. Route `**/api/windows/*/fork*` to a 200 recording each request URL,
    returning an EMPTY `windowId` so the app deliberately skips navigation (the
    best-effort window-id contract) and the assertion stays on this route.
@@ -180,7 +195,7 @@ returning into the row so arrow-key tree nav continues.
 
 **Steps:**
 1. Focus the `@1` row element; assert the card is visible with
-   "building — active".
+   the pr register (`#386`).
 2. Press Tab (up to 6 times, walking the row's action icons first) and assert
    the docs link receives focus; one more Tab focuses the PR link.
 3. Press Escape (focus inside the card); assert the card is removed and the
@@ -224,7 +239,7 @@ coarse too.
    rail contains the `row-pr-glyph` and `@2`'s does not; both rails show the
    `›` chevron hint; `@1` contains NO pin/kill buttons.
 4. Measure `@1`'s dot tap zone: width ≥ 32px, height ≥ 36px.
-5. Tap `@1`'s rail: assert the card opens with "building — active", carries
+5. Tap `@1`'s rail: assert the card opens with the pr register (`#386`), carries
    the change-color/fork/pin/kill action rows (color first, by bounding-box
    y), and the URL is still the bare server route
    (the tap did not select the row).
@@ -278,7 +293,7 @@ outside-press dismissal still works afterwards.
 1. Open the drawer; move the mouse to the center of `@1`'s rail and press
    (mouse.down dispatches pointerdown — the scrub trigger under the coarse
    mock).
-2. Assert the card opens with "building — active".
+2. Assert the card opens with "Window @1".
 3. Slide (mouse.move, still pressed) onto `@2`'s row: assert exactly one card,
    now showing "Window @2", and the URL still `/default` (no navigation).
 4. Assert containment on the retargeted card: its right edge is ≤ `@2`'s

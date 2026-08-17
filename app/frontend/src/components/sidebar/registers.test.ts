@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getOutputLine, getAgentLine, getFabLine, getPrSegments } from "./registers";
+import { getOutputLine, getAgentLine, getFabParts, getFabLine, getPrParts, getPrSegments } from "./registers";
 import { makeWindow, makeWindowWithPanes } from "@/test-utils/fixtures";
 
 // 93dy: the register-line resolvers were extracted from status-panel.tsx into
@@ -113,5 +113,74 @@ describe("getPrSegments (L3)", () => {
     );
     expect(segs?.[2]).toEqual({ text: "checks fail", color: "text-signal-red" });
     expect(segs?.[3]).toEqual({ text: "review: changes requested", color: "text-signal-red" });
+  });
+});
+
+// The parts resolvers feed the row-hover flyout card, which composes the fab
+// and pr registers across multiple lines; the joined formatters above are
+// pinned byte-identical for the PANE panel (status-panel.tsx) and status bar.
+describe("getFabParts", () => {
+  it("null under the same gate as getFabLine (no parseable change or no stage)", () => {
+    expect(getFabParts(makeWindow({}))).toBeNull();
+    expect(getFabParts(makeWindow({ fabChange: "260805-93dy-row-flyout" }))).toBeNull();
+  });
+
+  it("resolves id, slug, stage separately; displayState only when present", () => {
+    expect(
+      getFabParts(
+        makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "review", fabDisplayState: "failed" }),
+      ),
+    ).toEqual({ id: "93dy", slug: "row-flyout", stage: "review", displayState: "failed" });
+    expect(getFabParts(makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "apply" }))).toEqual({
+      id: "93dy",
+      slug: "row-flyout",
+      stage: "apply",
+    });
+  });
+});
+
+describe("getPrParts", () => {
+  it("null without a prNumber — even with a bare prUrl", () => {
+    expect(getPrParts(makeWindow({}))).toBeNull();
+    expect(getPrParts(makeWindow({ prUrl: "https://github.com/o/r/pull/9" }))).toBeNull();
+  });
+
+  it("splits identity (number + state) from health (checks + review)", () => {
+    const parts = getPrParts(
+      makeWindow({ prNumber: 241, prState: "open", prChecks: "pass", prReview: "approved" }),
+    );
+    expect(parts).toEqual({
+      identity: [
+        { text: "#241", color: "text-text-primary" },
+        { text: "open", color: "text-accent-green" },
+      ],
+      health: [
+        { text: "checks pass", color: "text-accent-green" },
+        { text: "review: approved", color: "text-accent-green" },
+      ],
+    });
+  });
+
+  it("a merged PR carries identity only — health is suppressed", () => {
+    const parts = getPrParts(
+      makeWindow({ prNumber: 241, prState: "merged", prChecks: "fail", prReview: "changes_requested" }),
+    );
+    expect(parts?.identity).toEqual([
+      { text: "#241", color: "text-text-primary" },
+      { text: "merged", color: "text-signal-purple" },
+    ]);
+    expect(parts?.health).toEqual([]);
+  });
+
+  it("the flat join is the identity followed by the health (formatter parity)", () => {
+    const win = makeWindow({
+      prNumber: 540,
+      prState: "open",
+      prIsDraft: true,
+      prChecks: "pending",
+      prReview: "changes_requested",
+    });
+    const parts = getPrParts(win)!;
+    expect(getPrSegments(win)).toEqual([...parts.identity, ...parts.health]);
   });
 });

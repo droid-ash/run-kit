@@ -44,19 +44,33 @@ export function getAgentLine(win: WindowInfo): string | null {
   return win.agentState;
 }
 
+export type FabParts = { id: string; slug: string; stage: string; displayState?: string };
+
+/** Resolve the L2 `fab` register into its parts so a surface can compose them
+ *  across lines (the row-hover flyout card leads with the decisive tokens and
+ *  moves the slug to a continuation line). Null when the window has no
+ *  parseable fab change or no stage. */
+export function getFabParts(win: WindowInfo): FabParts | null {
+  const fabChange = parseFabChange(win.fabChange ?? "");
+  if (!fabChange || !win.fabStage) return null;
+  const parts: FabParts = { id: fabChange.id, slug: fabChange.slug, stage: win.fabStage };
+  if (win.fabDisplayState) parts.displayState = win.fabDisplayState;
+  return parts;
+}
+
 /** Build the L2 `fab` register string: `<id> <slug> · <stage>[ ·
  *  <displayState>]`. The displayState segment is appended when present
  *  (`fab pane map` may omit it on older binaries). Null when the window has no
  *  parseable fab change or no stage. */
 export function getFabLine(win: WindowInfo): string | null {
-  const fabChange = parseFabChange(win.fabChange ?? "");
-  if (!fabChange || !win.fabStage) return null;
-  return `${fabChange.id} ${fabChange.slug} · ${win.fabStage}${
-    win.fabDisplayState ? ` · ${win.fabDisplayState}` : ""
-  }`;
+  const parts = getFabParts(win);
+  if (!parts) return null;
+  return `${parts.id} ${parts.slug} · ${parts.stage}${parts.displayState ? ` · ${parts.displayState}` : ""}`;
 }
 
 export type PrSegment = { text: string; color: string };
+
+export type PrParts = { identity: PrSegment[]; health: PrSegment[] };
 
 /**
  * Build the L3 `PR` register line as colored segments, e.g.
@@ -74,25 +88,37 @@ export type PrSegment = { text: string; color: string };
  * shows green. This reflects the project's "green = health, not
  * merge-readiness" story (a draft with passing checks is healthy, just not
  * flipped to ready) and keeps the PR surfaces consistent.
+ *
+ * The identity/health split lets a surface anchor the identity alone (the
+ * row-hover flyout card) while the health segments render outside the anchor.
  */
-export function getPrSegments(win: WindowInfo): PrSegment[] | null {
+export function getPrParts(win: WindowInfo): PrParts | null {
   if (!win.prNumber) return null;
-  const segments: PrSegment[] = [{ text: `#${win.prNumber}`, color: "text-text-primary" }];
+  const identity: PrSegment[] = [{ text: `#${win.prNumber}`, color: "text-text-primary" }];
   if (win.prState) {
-    segments.push({
+    identity.push({
       text: `${win.prState}${win.prIsDraft ? " (draft)" : ""}`,
       color: PR_STATE_COLORS[win.prState],
     });
   }
+  const health: PrSegment[] = [];
   const isOpen = !win.prState || win.prState === "open";
   if (isOpen && win.prChecks && win.prChecks !== "none") {
-    segments.push({ text: `checks ${win.prChecks}`, color: PR_CHECKS_COLORS[win.prChecks] });
+    health.push({ text: `checks ${win.prChecks}`, color: PR_CHECKS_COLORS[win.prChecks] });
   }
   if (isOpen && win.prReview && win.prReview !== "none") {
-    segments.push({
+    health.push({
       text: `review: ${win.prReview.replace(/_/g, " ")}`,
       color: PR_REVIEW_COLORS[win.prReview],
     });
   }
-  return segments;
+  return { identity, health };
+}
+
+/** Flat join of `getPrParts` (identity then health) — the single-line form
+ *  the PANE panel renders. */
+export function getPrSegments(win: WindowInfo): PrSegment[] | null {
+  const parts = getPrParts(win);
+  if (!parts) return null;
+  return [...parts.identity, ...parts.health];
 }

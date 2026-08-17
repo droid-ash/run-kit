@@ -1,0 +1,9 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-08-17T09:17:15Z"}
+{"args":"Option C of the row-flyout-card legibility work: elevate the hover card onto bg-bg-card with a theme-aware shadow (bg-bg-primary is the same hex as the terminal behind it, and stock shadow-lg is invisible on dark), promote action-row labels to text-text-primary with full-contrast hints (opacity-60 hints measure 2.5:1, under AA), and give the action list its own bg-bg-inset tray with a two-color hover rail — accent-green for Change color / Fork / Pin, signal-red for Kill window.","cmd":"fab-new","event":"command","ts":"2026-08-17T09:17:15Z"}
+{"delta":"+4.7","event":"confidence","score":4.7,"trigger":"calc-score","ts":"2026-08-17T09:21:07Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-08-17T09:23:56Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-08-17T09:24:05Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-08-17T09:36:41Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-08-17T09:39:54Z"}
+{"event":"review","result":"passed","ts":"2026-08-17T09:39:54Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-08-17T09:44:27Z"}

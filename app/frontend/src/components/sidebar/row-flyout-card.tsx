@@ -400,13 +400,13 @@ export function canForkWindow(win: WindowInfo): boolean {
  *  label left, muted sub-hint right; ≥36px touch height on coarse, ~28px on
  *  fine pointers (the row-cluster touch-target convention). */
 const ACTION_ROW_CLASS =
-  "flex w-full items-center gap-1.5 min-w-0 px-2 text-left whitespace-nowrap min-h-[28px] coarse:min-h-[36px] text-text-secondary hover:bg-bg-inset focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent";
+  "flex w-full items-center gap-1.5 min-w-0 px-2 text-left whitespace-nowrap min-h-[28px] coarse:min-h-[36px] text-text-primary hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] border-l-2 border-l-transparent pl-1.5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent";
 
 /** The muted per-action sub-hint riding the row's right edge. It is the row's
  *  FLEXIBLE part (`min-w-0 truncate`): inside the `max-w-xs` fine-pointer card
  *  a long hint ellipsizes instead of painting past the card box; the label
  *  (wrapped in a shrink-0 span at each call site) never truncates. */
-const ACTION_ROW_HINT_CLASS = "ml-auto min-w-0 truncate pl-2 text-text-secondary opacity-60";
+const ACTION_ROW_HINT_CLASS = "ml-auto min-w-0 truncate pl-2 text-text-secondary";
 
 /** The card's sectioned action list — the `-mx-2` counter-inset (the title
  *  bar's idiom) lets the top border + inter-row hairlines span the card edge
@@ -414,7 +414,7 @@ const ACTION_ROW_HINT_CLASS = "ml-auto min-w-0 truncate pl-2 text-text-secondary
 export function CardActionList({ children }: { children: ReactNode }) {
   return (
     <div
-      className="-mx-2 mt-0.5 border-t border-border divide-y divide-border"
+      className="-mx-2 -mb-1.5 mt-1 rounded-b-[5px] bg-bg-inset border-t border-border divide-y divide-border"
       data-testid="row-flyout-actions"
     >
       {children}
@@ -449,7 +449,7 @@ export function CardActionRow({
         e.stopPropagation();
         onClick();
       }}
-      className={`${ACTION_ROW_CLASS} ${danger ? "hover:text-signal-red" : "hover:text-text-primary"}`}
+      className={`${ACTION_ROW_CLASS} ${danger ? "hover:text-signal-red hover:border-l-signal-red" : "hover:text-text-primary hover:border-l-accent-green"}`}
       data-testid={testid}
     >
       {icon}
@@ -496,7 +496,7 @@ function ForkActionRow({ onFork }: { onFork: () => Promise<void> }) {
         });
       }}
       disabled={busy}
-      className={`${ACTION_ROW_CLASS} hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-text-secondary`}
+      className={`${ACTION_ROW_CLASS} hover:text-text-primary hover:border-l-accent-green disabled:hover:border-l-transparent disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-text-secondary`}
       aria-label={FORK_TOOLTIP}
       title={FORK_TOOLTIP}
       data-testid="row-flyout-fork-action"
@@ -1008,7 +1008,7 @@ export function useRowFlyout({ suppressed = false, coarseOnly = false, content }
           // never animate transform (it would clobber the translate).
           // The `max-w-xs` cap is FINE-POINTER-ONLY: on coarse the size()
           // middleware owns the width cap (stop before the status rail).
-          className={`z-50 flex flex-col gap-1 bg-bg-primary border border-border rounded-md shadow-lg px-2 py-1.5 text-xs font-mono w-max${coarse ? "" : " max-w-xs"}${
+          className={`z-50 flex flex-col gap-1 bg-bg-card border border-border rounded-md rk-popup-elev px-2 py-1.5 text-xs font-mono w-max${coarse ? "" : " max-w-xs"}${
             coldOpenRef.current ? " rk-flyout-in" : ""
           }`}
         >

@@ -1,0 +1,54 @@
+id: nwz9
+name: 260817-nwz9-flyout-card-elevation-action-tray
+created: 2026-08-17T09:17:15Z
+created_by: droid-ash
+change_type: fix
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: active
+    review-pr: pending
+plan:
+    generated: true
+    task_count: 14
+    acceptance_count: 22
+    acceptance_completed: 22
+confidence:
+    certain: 8
+    confident: 4
+    tentative: 0
+    unresolved: 0
+    score: 4.7
+    fuzzy: true
+    dimensions:
+        signal: 72.1
+        reversibility: 84.2
+        competence: 88.3
+        disambiguation: 85.0
+stage_metrics:
+    intake: {started_at: "2026-08-17T09:17:15Z", driver: fab-new, iterations: 1, completed_at: "2026-08-17T09:24:05Z"}
+    apply: {started_at: "2026-08-17T09:24:05Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T09:36:41Z"}
+    review: {started_at: "2026-08-17T09:36:41Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T09:39:54Z"}
+    hydrate: {started_at: "2026-08-17T09:39:54Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T09:44:27Z"}
+    ship: {started_at: "2026-08-17T09:44:27Z", driver: fab-fff, iterations: 1}
+prs: []
+true_impact:
+    added: 0
+    deleted: 0
+    net: 0
+    excluding:
+        added: 0
+        deleted: 0
+        net: 0
+    tests:
+        added: 0
+        deleted: 0
+        net: 0
+    computed_at: "2026-08-17T09:44:27Z"
+    computed_at_stage: hydrate
+summary: elevates the row popups to bg-bg-card + .rk-popup-elev occlusion shadow, moves the flyout action rows into an inset tray with primary labels, un-dimmed hints, and a green/red hover rail
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-08-17T09:44:27Z

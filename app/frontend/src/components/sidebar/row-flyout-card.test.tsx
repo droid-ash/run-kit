@@ -208,10 +208,10 @@ describe("RowFlyout card content", () => {
     // the fill decision is pinned through its exported seam.
     expect(notchFill(0)).toBe("var(--color-bg-inset)");
     expect(notchFill(POPUP_TITLE_BAR_HEIGHT_PX - 1)).toBe("var(--color-bg-inset)");
-    expect(notchFill(POPUP_TITLE_BAR_HEIGHT_PX)).toBe("var(--color-bg-primary)");
-    expect(notchFill(120)).toBe("var(--color-bg-primary)");
-    expect(notchFill(null)).toBe("var(--color-bg-primary)");
-    expect(notchFill(undefined)).toBe("var(--color-bg-primary)");
+    expect(notchFill(POPUP_TITLE_BAR_HEIGHT_PX)).toBe("var(--color-bg-card)");
+    expect(notchFill(120)).toBe("var(--color-bg-card)");
+    expect(notchFill(null)).toBe("var(--color-bg-card)");
+    expect(notchFill(undefined)).toBe("var(--color-bg-card)");
   });
 
   it("absent layers render as absent: a plain shell pane shows ONLY the out register", () => {
@@ -654,6 +654,67 @@ describe("Pin/Kill action rows (ys3q)", () => {
     expect(onPinAction).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
     expect(screen.queryByTestId("row-flyout-card")).toBeNull();
+  });
+});
+
+describe("flyout card elevation + action tray", () => {
+  it("the card shell sits on the elevated surface with the popup-elevation shadow", () => {
+    renderOpen(makeWindow({}));
+    const card = screen.getByTestId("row-flyout-card");
+    expect(card.className).toContain("bg-bg-card");
+    expect(card.className).toContain("rk-popup-elev");
+    expect(card.className).not.toContain("bg-bg-primary");
+    expect(card.className).not.toContain("shadow-lg");
+  });
+
+  it("the action list is an inset tray reaching the card's bottom edge", () => {
+    render(<Row win={makeWindow({})} onPinAction={() => {}} />);
+    hoverOpen();
+    const tray = screen.getByTestId("row-flyout-actions");
+    expect(tray.className).toContain("bg-bg-inset");
+    expect(tray.className).toContain("rounded-b-[5px]");
+    expect(tray.className).toContain("-mb-1.5");
+  });
+
+  it("action rows read primary at rest and the rail color rides the danger seam", () => {
+    render(
+      <Row
+        win={makeWindow({ chatProvider: "claude" })}
+        onFork={() => Promise.resolve()}
+        onPinAction={() => {}}
+        onKillAction={() => {}}
+      />,
+    );
+    hoverOpen();
+    const pin = screen.getByTestId("row-flyout-pin-action");
+    const kill = screen.getByTestId("row-flyout-kill-action");
+    const fork = screen.getByTestId("row-flyout-fork-action");
+    // The rail geometry is colorless and width-neutral: pl-1.5 (6px) plus the
+    // 2px border restores the prior 8px inset, so labels never shift on hover.
+    for (const row of [pin, kill, fork]) {
+      expect(row.className).toContain("text-text-primary");
+      expect(row.className).toContain("border-l-2");
+      expect(row.className).toContain("border-l-transparent");
+      expect(row.className).toContain("pl-1.5");
+    }
+    expect(pin.className).toContain("hover:border-l-accent-green");
+    expect(pin.className).not.toContain("hover:border-l-signal-red");
+    expect(kill.className).toContain("hover:border-l-signal-red");
+    expect(kill.className).not.toContain("hover:border-l-accent-green");
+    // Fork builds its own className, so it carries the rail directly — with a
+    // disabled reset so an in-flight fork lights nothing on hover.
+    expect(fork.className).toContain("hover:border-l-accent-green");
+    expect(fork.className).toContain("disabled:hover:border-l-transparent");
+  });
+
+  it("the per-action sub-hint stays secondary but is no longer dimmed", () => {
+    render(<Row win={makeWindow({})} onPinAction={() => {}} />);
+    hoverOpen();
+    const hint = Array.from(screen.getByTestId("row-flyout-pin-action").querySelectorAll("span")).find(
+      (s) => s.textContent === "not pinned",
+    )!;
+    expect(hint.className).toContain("text-text-secondary");
+    expect(hint.className).not.toContain("opacity-60");
   });
 });
 

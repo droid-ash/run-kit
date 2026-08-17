@@ -26,7 +26,7 @@ export const POPUP_TITLE_BAR_HEIGHT_PX = 25;
 export function notchFill(arrowY: number | null | undefined): string {
   return arrowY != null && arrowY < POPUP_TITLE_BAR_HEIGHT_PX
     ? "var(--color-bg-inset)"
-    : "var(--color-bg-primary)";
+    : "var(--color-bg-card)";
 }
 
 /** Secondary-text literal segment (the `Window`/`pane`/`· N panes` words). */

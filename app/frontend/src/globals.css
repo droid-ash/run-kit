@@ -751,6 +751,28 @@ summary {
 }
 .rk-flyout-in { animation: rk-flyout-in 140ms ease-out; }
 
+/* ── Popup elevation shadow (.rk-popup-elev) ─────────────────────────────────
+   The sidebar popups (row-flyout card, identity tips) separate from the
+   terminal by OCCLUSION, not lightness: bg-card measures ~1.1:1 against the
+   page ground in both themes, so only a cast shadow reads. These are shadow
+   ALPHAS on near-black, not surface colors — they deliberately live outside
+   @theme/UIColors, which would re-derive them per terminal palette. A single
+   alpha cannot serve both themes (70% black is right on the near-black dark
+   ground and far too heavy on white), so the light theme overrides both. */
+:root {
+  --rk-popup-shadow-a: rgb(0 0 0 / .70);
+  --rk-popup-shadow-b: rgb(0 0 0 / .55);
+}
+html[data-theme="light"] {
+  --rk-popup-shadow-a: rgb(15 17 23 / .20);
+  --rk-popup-shadow-b: rgb(15 17 23 / .12);
+}
+.rk-popup-elev {
+  box-shadow:
+    0 12px 28px -8px var(--rk-popup-shadow-a),
+    0 4px 10px -4px var(--rk-popup-shadow-b);
+}
+
 /* ── Gap-seam tile chrome (260814-011r) ─────────────────────────────────────
    VS Code-style gap-seam vocabulary for the surface-layout tile grid: the GAP
    does the separating (rest borders dim, the inset ground shows through), 3

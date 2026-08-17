@@ -1,5 +1,6 @@
 # Archived Changes
 
+- **260817-r65p-row-popup-elevation-contrast** — row popup elevation contrast
 - **260816-b8eu-status-rail-card-actions** — Right-edge status rail + contained mobile card + explicit card actions
 - **260816-ys3q-mobile-pr-glyph-flyout-scrub** — Mobile PR-Status Parity + Flyout Scrub Gesture
 - **260816-499u-status-bar-reorder-drop-out** — Status-Bar Segment Reorder + `out` Register Removal

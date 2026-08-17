@@ -132,7 +132,7 @@ export function IdentityTipCard({
         data-testid={testid}
         // pointer-events-none: the card holds nothing interactive, so it must
         // never intercept a click meant for the rows beneath it.
-        className="z-50 pointer-events-none flex flex-col gap-1 bg-bg-primary border border-border rounded-md shadow-lg px-2 py-1.5 text-xs font-mono w-max max-w-xs"
+        className="z-50 pointer-events-none flex flex-col gap-1 bg-bg-card border border-border rounded-md rk-popup-elev px-2 py-1.5 text-xs font-mono w-max max-w-xs"
       >
         {/* Same notch contract as the window flyout: pinned to the row's
             vertical center, inset fill while it lands on the title band. */}

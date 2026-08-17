@@ -1,0 +1,2 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-08-17T08:49:49Z"}
+{"args":"Sidebar row-popup elevation + action-row contrast: flyout card and identity tip paint on bg-bg-primary (same hex as the terminal behind) with stock shadow-lg (invisible on dark); action rows sit at text-text-secondary like the read-only registers above them, hints at opacity-60 (2.5:1, under AA).","cmd":"fab-new","event":"command","ts":"2026-08-17T08:49:49Z"}

@@ -195,8 +195,6 @@ test.describe("Row flyout card (fine pointer)", () => {
     );
     // pr: identity inside the anchor; health + freshness as continuation lines.
     await expect(page.getByTestId("row-flyout-pr")).toContainText("#386");
-    await expect(page.getByTestId("row-flyout-pr-health")).toContainText("checks pass · approved");
-    await expect(page.getByTestId("row-flyout-checked")).toContainText(/checked \d+\w+ ago/);
     // The pr register LINE itself is the open-first anchor (PrLinkRow idiom):
     // it wraps the segments and carries an always-visible inline ↗.
     const prLink = page.getByTestId("row-flyout-pr-link");

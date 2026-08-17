@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getOutputLine, getAgentLine, getFabParts, getFabLine, getPrParts, getPrSegments } from "./registers";
+import { getOutputLine, getAgentLine, getFabParts, getFabLine, getPrSegments } from "./registers";
 import { makeWindow, makeWindowWithPanes } from "@/test-utils/fixtures";
 
 // 93dy: the register-line resolvers were extracted from status-panel.tsx into
@@ -139,48 +139,45 @@ describe("getFabParts", () => {
   });
 });
 
-describe("getPrParts", () => {
+describe("getPrSegments", () => {
   it("null without a prNumber — even with a bare prUrl", () => {
-    expect(getPrParts(makeWindow({}))).toBeNull();
-    expect(getPrParts(makeWindow({ prUrl: "https://github.com/o/r/pull/9" }))).toBeNull();
+    expect(getPrSegments(makeWindow({}))).toBeNull();
+    expect(getPrSegments(makeWindow({ prUrl: "https://github.com/o/r/pull/9" }))).toBeNull();
   });
 
-  it("splits identity (number + state) from health (checks + review)", () => {
-    const parts = getPrParts(
-      makeWindow({ prNumber: 241, prState: "open", prChecks: "pass", prReview: "approved" }),
-    );
-    expect(parts).toEqual({
-      identity: [
-        { text: "#241", color: "text-text-primary" },
-        { text: "open", color: "text-accent-green" },
-      ],
-      health: [
-        { text: "checks pass", color: "text-accent-green" },
-        { text: "review: approved", color: "text-accent-green" },
-      ],
-    });
+  it("one flat list: number, state, then checks and review", () => {
+    expect(
+      getPrSegments(makeWindow({ prNumber: 241, prState: "open", prChecks: "pass", prReview: "approved" })),
+    ).toEqual([
+      { text: "#241", color: "text-text-primary" },
+      { text: "open", color: "text-accent-green" },
+      { text: "checks pass", color: "text-accent-green" },
+      { text: "review: approved", color: "text-accent-green" },
+    ]);
   });
 
-  it("a merged PR carries identity only — health is suppressed", () => {
-    const parts = getPrParts(
-      makeWindow({ prNumber: 241, prState: "merged", prChecks: "fail", prReview: "changes_requested" }),
-    );
-    expect(parts?.identity).toEqual([
+  it("a merged PR drops checks and review — they are history once it lands", () => {
+    expect(
+      getPrSegments(
+        makeWindow({ prNumber: 241, prState: "merged", prChecks: "fail", prReview: "changes_requested" }),
+      ),
+    ).toEqual([
       { text: "#241", color: "text-text-primary" },
       { text: "merged", color: "text-signal-purple" },
     ]);
-    expect(parts?.health).toEqual([]);
   });
 
-  it("the flat join is the identity followed by the health (formatter parity)", () => {
-    const win = makeWindow({
-      prNumber: 540,
-      prState: "open",
-      prIsDraft: true,
-      prChecks: "pending",
-      prReview: "changes_requested",
-    });
-    const parts = getPrParts(win)!;
-    expect(getPrSegments(win)).toEqual([...parts.identity, ...parts.health]);
+  it("an open draft keeps every segment — the widest line the register produces", () => {
+    expect(
+      getPrSegments(
+        makeWindow({
+          prNumber: 540,
+          prState: "open",
+          prIsDraft: true,
+          prChecks: "pending",
+          prReview: "changes_requested",
+        }),
+      )!.map((s) => s.text),
+    ).toEqual(["#540", "open (draft)", "checks pending", "review: changes requested"]);
   });
 });

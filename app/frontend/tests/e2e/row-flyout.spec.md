@@ -8,10 +8,10 @@ status-detail surface that replaced the per-dot `StatusDotTip` hover-card
 whole-row hover at a fixed x (the sidebar's right edge) on fine pointers and
 BELOW the row (`bottom-start`, width-capped short of the rail) on coarse
 pointers, on keyboard row focus, and on coarse-pointer rail-tap/dot-tap; its
-body is the `fab` and `pr` registers only — critical tokens lead (`id · stage
-· state`, the anchored PR identity), long values continue on indented lines,
-freshness lives inside the pr group, and a window with neither a change nor a
-PR renders no body at all — plus the PR/docs links; a window with an owned
+body is the `fab` and `pr` registers only — the `fab` register leads with
+`id · stage · state` and drops its slug to an indented continuation line, the
+`pr` register stays one anchored line carrying every segment, and a window with
+neither a change nor a PR renders no body at all — plus the PR/docs links; a window with an owned
 PR shows a rest-state git-pull-request glyph that swaps for the pin/✕ actions
 on hover (fine pointers) and lives in the rail's fixed 16px slot on coarse. It
 also covers the card's **sectioned action rows** — change color / fork / pin /
@@ -50,7 +50,7 @@ width at ≈16px).
       `prReview: approved`, fresh `prFetchedAt`) → blue
       "building — active — agent waiting 3m" dot (the PR never owns the dot —
       compositional vocabulary), rest PR glyph, the fab + pr register card
-      (slug, health and freshness on continuation lines), fork
+      (the fab slug on a continuation line), fork
       action row, and a two-pane list (`%425` active) so the identity title bar
       renders its full `Window @1 · pane %425 · 2 panes` form.
     - `@2` "scratch-shell" — plain window → gray "idle" dot, no glyph,
@@ -61,7 +61,7 @@ width at ≈16px).
       interactive zone's removal.
 - Rows are located by `[role='treeitem'][data-window-id]`; the card by
   `data-testid="row-flyout-card"`; registers/links by `row-flyout-fab|fab-slug|
-  pr|pr-health|checked|pr-link|docs-link`; the card's sectioned action rows by
+  pr|pr-link|docs-link`; the card's sectioned action rows by
   `row-flyout-color-action` / `row-flyout-fork-action` /
   `row-flyout-pin-action` / `row-flyout-kill-action` (+ `row-flyout-spawn-action`
   / `row-flyout-create-action` on the session/server tiers);
@@ -87,9 +87,8 @@ gone from the title bar — one affordance, one home); the body is the `fab` and
 `pr` registers ONLY — no status-label line, no `out`, no `agt` (the row
 already carries the name, dot, glyph and label). The `fab` register leads with
 its decisive tokens (`93dy · apply · active`) and the slug continues on an
-indented line; the `pr` register splits into the anchored identity line and a
-plain-text health continuation, with the "checked Xs ago" freshness line
-inside the pr group.
+indented line; the `pr` register is a single anchored line carrying number,
+state, checks and review.
 The card's bottom carries the **sectioned action rows** in the fixed
 change-color → fork → pin → kill order (`Change color…` first — 260817-ve5m),
 each with its sub-hint ("new window, same directory" /
@@ -106,9 +105,8 @@ always-visible inline `↗`, and opens the PR in a new tab
    the `fab` register text, the card does NOT contain the dot label
    ("building — active"), the `row-flyout-out`/`row-flyout-agt` testids are
    absent, the fab register reads `93dy · apply · active` with the slug on its
-   continuation line, the pr register shows `#386` with
-   `checks pass · approved` on the health continuation, and the freshness line
-   renders.
+   continuation line, and the pr register reads
+   `#386 · open · checks pass · review: approved` on one line.
 3. Assert the sectioned action rows: change color ("Change color…"), fork
    ("Fork conversation" / "new window,
    same directory"), pin ("Pin to board…" / "not pinned"), kill ("Kill window"

@@ -6,8 +6,6 @@ import {
   flyoutOpenDelay,
   resetFlyoutWarmState,
   scrubTargetAt,
-  prFetchedAtEpoch,
-  FreshnessLine,
   FLYOUT_OPEN_DELAY_MS,
   STATUS_DOT_DOCS_URL,
   STATUS_RAIL_WIDTH_PX,
@@ -221,8 +219,6 @@ describe("RowFlyout card content", () => {
       "row-flyout-fab-slug",
       "row-flyout-pr",
       "row-flyout-pr-link",
-      "row-flyout-pr-health",
-      "row-flyout-checked",
     ]) {
       expect(screen.queryByTestId(id)).toBeNull();
     }
@@ -236,7 +232,7 @@ describe("RowFlyout card content", () => {
     expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
   });
 
-  it("renders the fab and pr registers with continuation lines, freshness, and the PR anchor", () => {
+  it("renders the fab register with its slug continuation and the pr register as one anchored line", () => {
     vi.setSystemTime(new Date("2026-08-05T10:00:30Z"));
     renderOpen(
       makeWindowWithPanes({
@@ -270,27 +266,18 @@ describe("RowFlyout card content", () => {
     // pr: the identity stays inside the anchor; the health facts continue as
     // plain text OUTSIDE it (the anchor never spans two visual rows).
     const pr = screen.getByTestId("row-flyout-pr");
-    expect(pr).toHaveTextContent("#386");
-    expect(pr).toHaveTextContent("open");
-    expect(pr).not.toHaveTextContent("checks");
-    const health = screen.getByTestId("row-flyout-pr-health");
-    expect(health).toHaveTextContent("checks pass · approved");
+    expect(pr).toHaveTextContent("#386 · open · checks pass · review: approved");
     // Register + continuation lines ellipsize INSIDE the max-w-xs card (panel
     // parity — status-panel.tsx `min-w-0 truncate`); jsdom has no layout, so
     // the classes are pinned here and the real no-overflow box is asserted in
     // e2e (row-flyout.spec.ts).
-    for (const id of ["row-flyout-fab", "row-flyout-fab-slug", "row-flyout-pr", "row-flyout-pr-health"]) {
+    for (const id of ["row-flyout-fab", "row-flyout-fab-slug", "row-flyout-pr"]) {
       expect(screen.getByTestId(id).className).toContain("truncate");
     }
-    // Freshness renders inside the pr group, after the health line.
-    const checked = screen.getByTestId("row-flyout-checked");
-    expect(checked).toHaveTextContent("checked 30s ago");
-    expect(health.compareDocumentPosition(checked) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The pr identity LINE is the open-first anchor (PrLinkRow idiom): the
-    // segments live inside it, with the always-visible inline ↗ after them.
+    // The pr LINE is the open-first anchor (PrLinkRow idiom): every segment
+    // lives inside it, with the always-visible inline ↗ after them.
     const link = screen.getByTestId("row-flyout-pr-link");
     expect(link).toContainElement(pr);
-    expect(link).not.toContainElement(health);
     expect(link).toHaveTextContent("↗");
     expect(link).toHaveAttribute("aria-label", "Open PR #386 in a new tab");
     expect(link).toHaveAttribute("href", "https://github.com/o/r/pull/386");
@@ -308,7 +295,7 @@ describe("RowFlyout card content", () => {
     expect(screen.getByTestId("row-flyout-arrow")).toBeInTheDocument();
   });
 
-  it("the widest PR state (open draft, checks pending, changes requested) splits across identity + health", () => {
+  it("the widest PR state renders every segment on the one pr line", () => {
     renderOpen(
       makeWindow({
         prNumber: 540,
@@ -319,11 +306,9 @@ describe("RowFlyout card content", () => {
       }),
     );
     const pr = screen.getByTestId("row-flyout-pr");
-    expect(pr).toHaveTextContent("#540 · open (draft)");
-    expect(pr).not.toHaveTextContent("checks");
-    expect(screen.getByTestId("row-flyout-pr-health")).toHaveTextContent(
-      "checks pending · changes requested",
-    );
+    expect(pr).toHaveTextContent("#540 · open (draft) · checks pending · review: changes requested");
+    // One line, so it truncates rather than wrapping — the box is asserted in e2e.
+    expect(pr.className).toContain("truncate");
   });
 
   it("a change with no PR renders the fab register alone (no pr group, no freshness)", () => {
@@ -334,7 +319,6 @@ describe("RowFlyout card content", () => {
     expect(screen.getByTestId("row-flyout-fab-slug")).toHaveTextContent("row-flyout");
     expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
     expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
-    expect(screen.queryByTestId("row-flyout-checked")).toBeNull();
   });
 
   it("a fab change with no slug renders no empty continuation line", () => {
@@ -343,36 +327,18 @@ describe("RowFlyout card content", () => {
     expect(screen.queryByTestId("row-flyout-fab-slug")).toBeNull();
   });
 
-  it("gates freshness on the pr register: prFetchedAt without prNumber renders no freshness line", () => {
+  it("a prFetchedAt with no PR is inert — the card carries no freshness line at all", () => {
     renderOpen(makeWindow({ prFetchedAt: "2026-08-05T10:00:00Z" }));
-    expect(screen.queryByTestId("row-flyout-checked")).toBeNull();
+    expect(screen.queryByTestId("row-flyout-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
   });
 
-  it("splits the pr register into a colored identity line and a plain-text health line", () => {
-    renderOpen(
-      makeWindow({
-        prNumber: 7,
-        prState: "open",
-        prChecks: "fail",
-      }),
-    );
+  it("the pr line keeps a color per segment", () => {
+    renderOpen(makeWindow({ prNumber: 7, prState: "open", prChecks: "fail" }));
     const pr = screen.getByTestId("row-flyout-pr");
-    // Identity keeps the shared color vocabulary (the state follows
-    // PR_STATE_COLORS); the health facts render as uniform secondary text on
-    // the continuation line — no per-segment colors.
-    const state = Array.from(pr.querySelectorAll("span")).find((s) => s.textContent === "open");
-    expect(state!.className).toContain("text-accent-green");
-    const health = screen.getByTestId("row-flyout-pr-health");
-    expect(health).toHaveTextContent("checks fail");
-    expect(health.className).toContain("text-text-secondary");
-    expect(health.querySelector(".text-signal-red")).toBeNull();
-    // No URL → the line stays plain read-only text, no anchor. Its RegisterLine
-    // prefix carries the same pinned "pr" + 2-NBSP codepoints.
-    expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
-    const plainPrefix = pr.querySelector("span")!.textContent!;
-    expect(Array.from(plainPrefix).map((c) => c.codePointAt(0))).toEqual([
-      0x70, 0x72, 0x00a0, 0x00a0,
-    ]);
+    const spans = Array.from(pr.querySelectorAll("span"));
+    expect(spans.find((s) => s.textContent === "open")!.className).toContain("text-accent-green");
+    expect(spans.find((s) => s.textContent === "checks fail")!.className).toContain("text-signal-red");
   });
 
   it("a bare prUrl with no prNumber renders no pr line — and no body when there is no change either", () => {
@@ -381,7 +347,6 @@ describe("RowFlyout card content", () => {
     expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
     expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
     expect(screen.queryByTestId("row-flyout-fab")).toBeNull();
-    expect(screen.queryByTestId("row-flyout-checked")).toBeNull();
     expect(screen.getByTestId("popup-title-bar")).toBeInTheDocument();
   });
 
@@ -597,27 +562,6 @@ describe("Flyout warm-window delay group (module-scoped)", () => {
   });
 });
 
-describe("prFetchedAtEpoch + FreshnessLine (migrated from the dot tip)", () => {
-  it("parses prFetchedAt to epoch seconds", () => {
-    expect(prFetchedAtEpoch(makeWindow({ prFetchedAt: "2026-07-15T10:00:00Z" }))).toBe(
-      Math.floor(Date.parse("2026-07-15T10:00:00Z") / 1000),
-    );
-  });
-
-  it("null when absent or unparseable", () => {
-    expect(prFetchedAtEpoch(makeWindow({}))).toBeNull();
-    expect(prFetchedAtEpoch(makeWindow({ prFetchedAt: "garbage" }))).toBeNull();
-  });
-
-  it("FreshnessLine renders the relative time and omits itself on null", () => {
-    vi.setSystemTime(new Date("2026-07-15T10:00:30Z"));
-    render(<FreshnessLine fetchedAtEpoch={Math.floor(Date.parse("2026-07-15T10:00:00Z") / 1000)} />);
-    expect(screen.getByTestId("row-flyout-checked")).toHaveTextContent("checked 30s ago");
-    cleanup();
-    render(<FreshnessLine fetchedAtEpoch={null} />);
-    expect(screen.queryByTestId("row-flyout-checked")).toBeNull();
-  });
-});
 
 // Sectioned action rows (change color → fork → pin → kill): the card is the
 // color/pin/kill home on

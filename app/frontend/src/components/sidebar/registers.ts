@@ -70,8 +70,6 @@ export function getFabLine(win: WindowInfo): string | null {
 
 export type PrSegment = { text: string; color: string };
 
-export type PrParts = { identity: PrSegment[]; health: PrSegment[] };
-
 /**
  * Build the L3 `PR` register line as colored segments, e.g.
  * "#241 · open · checks pass" for an open PR, or "#241 · merged" once it
@@ -88,37 +86,26 @@ export type PrParts = { identity: PrSegment[]; health: PrSegment[] };
  * shows green. This reflects the project's "green = health, not
  * merge-readiness" story (a draft with passing checks is healthy, just not
  * flipped to ready) and keeps the PR surfaces consistent.
- *
- * The identity/health split lets a surface anchor the identity alone (the
- * row-hover flyout card) while the health segments render outside the anchor.
  */
-export function getPrParts(win: WindowInfo): PrParts | null {
+export function getPrSegments(win: WindowInfo): PrSegment[] | null {
   if (!win.prNumber) return null;
-  const identity: PrSegment[] = [{ text: `#${win.prNumber}`, color: "text-text-primary" }];
+  const segments: PrSegment[] = [{ text: `#${win.prNumber}`, color: "text-text-primary" }];
   if (win.prState) {
-    identity.push({
+    segments.push({
       text: `${win.prState}${win.prIsDraft ? " (draft)" : ""}`,
       color: PR_STATE_COLORS[win.prState],
     });
   }
-  const health: PrSegment[] = [];
   const isOpen = !win.prState || win.prState === "open";
   if (isOpen && win.prChecks && win.prChecks !== "none") {
-    health.push({ text: `checks ${win.prChecks}`, color: PR_CHECKS_COLORS[win.prChecks] });
+    segments.push({ text: `checks ${win.prChecks}`, color: PR_CHECKS_COLORS[win.prChecks] });
   }
   if (isOpen && win.prReview && win.prReview !== "none") {
-    health.push({
+    segments.push({
       text: `review: ${win.prReview.replace(/_/g, " ")}`,
       color: PR_REVIEW_COLORS[win.prReview],
     });
   }
-  return { identity, health };
+  return segments;
 }
 
-/** Flat join of `getPrParts` (identity then health) — the single-line form
- *  the PANE panel renders. */
-export function getPrSegments(win: WindowInfo): PrSegment[] | null {
-  const parts = getPrParts(win);
-  if (!parts) return null;
-  return [...parts.identity, ...parts.health];
-}

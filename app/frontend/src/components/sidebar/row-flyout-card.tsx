@@ -18,10 +18,8 @@ import {
 } from "@floating-ui/react";
 import { PinIcon } from "@/components/pin-icon";
 import { CloseIcon, PaletteIcon } from "./icons";
-import { getFabParts, getPrParts } from "./registers";
+import { getFabParts, getPrSegments } from "./registers";
 import { PopupTitleBar, PopupTitleBarSecondary, notchFill } from "./popup-title-bar";
-import { formatDuration } from "@/lib/format";
-import { useNow } from "@/hooks/use-now";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import type { WindowInfo } from "@/types";
 
@@ -45,11 +43,10 @@ import type { WindowInfo } from "@/types";
  * already carries the window name, the status dot, the PR glyph and the
  * colour label, so the `out`/`agt` registers and the dot label would restate
  * it. The registers are composed from the parts resolvers in ./registers.ts
- * (one source, no drift): critical tokens lead (`id · stage · state`, the PR
- * identity), long values continue on indented `pl-[4ch]` lines where
- * truncation costs nothing, the "checked Xs ago" freshness line lives inside
- * the `pr` group, and a window with neither a change nor a PR renders NO body
- * — title bar and action rows only. Plus the identity title bar
+ * (one source, no drift): the `fab` register leads with `id · stage · state`
+ * and drops its slug to an indented `pl-[4ch]` line where truncation costs
+ * nothing, the `pr` register stays a single anchored line, and a window with
+ * neither a change nor a PR renders NO body — title bar and action rows only. Plus the identity title bar
  * (`Window @N · pane %N · N panes` — the
  * shared `PopupTitleBar` chrome, carrying only the ⓘ docs affordance on its
  * right edge) and the sectioned action rows (change color /
@@ -61,11 +58,11 @@ import type { WindowInfo } from "@/types";
  *
  * PERF (ui-patterns § Render Performance — hard constraints): everything here
  * is row-local. The open state lives inside the consuming `WindowRow` via
- * `useRowFlyout` (never lifted to `Sidebar`), the card body mounts ONLY while
- * open, and the freshness line's live `useNow` clock is leaf-scoped inside
- * that open card — the row itself never ticks.
- * The title bar is STATIC text derived from the already-passed `win` — it
- * adds no clock, subscription, or lifted state.
+ * `useRowFlyout` (never lifted to `Sidebar`), and the card body mounts ONLY
+ * while open. The card holds NO clock at all: every line is static text
+ * derived from the already-passed `win`, so nothing here ticks even while a
+ * card is open. Do not reintroduce a `useNow()` consumer — a live elapsed
+ * value belongs in the PANE panel, which is a single instance.
  */
 
 /** Hover open delay outside a warm window (mirrors Tip's 300ms, tuned +50ms —
@@ -329,30 +326,6 @@ function InfoIcon() {
   );
 }
 
-/** Parse `prFetchedAt` to epoch SECONDS; null when absent or unparseable
- *  (`Date.parse` → NaN) so the card omits the freshness line rather than
- *  rendering "checked NaNs ago". (Migrated from dotTipContent.) */
-export function prFetchedAtEpoch(win: WindowInfo): number | null {
-  const parsed = win.prFetchedAt ? Date.parse(win.prFetchedAt) : NaN;
-  return Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
-}
-
-/**
- * Freshness line ("checked Xs ago"), its OWN component so its live `useNow()`
- * clock is scoped to the leaf that displays it (use-now.ts contract). Mounted
- * only inside the open card, so the 1/s re-render fires only while the card is
- * open. Returns null when there is no fetch timestamp. (Migrated verbatim from
- * status-dot-tip.tsx; only the testid is renamed to the flyout vocabulary.)
- */
-export function FreshnessLine({ fetchedAtEpoch }: { fetchedAtEpoch: number | null }) {
-  const nowSeconds = useNow();
-  if (fetchedAtEpoch === null) return null;
-  return (
-    <span className="text-text-secondary whitespace-nowrap" data-testid="row-flyout-checked">
-      {`checked ${formatDuration(nowSeconds - fetchedAtEpoch)} ago`}
-    </span>
-  );
-}
 
 /** One register line: fixed-width prefix + read-only content. The prefix
  *  column follows the PANE panel's 4-advance vocabulary (3-char key + space;
@@ -591,23 +564,18 @@ export function WindowFlyoutContent({
   onKillAction?: () => void;
 }) {
   const fabParts = getFabParts(win);
-  const prParts = getPrParts(win);
-  // Single-sourced identity JSX shared by the anchor and plain branches below
+  const prSegments = getPrSegments(win);
+  // Single-sourced segment JSX shared by the anchor and plain branches below
   // (the panel's segmentSpans idiom — the two renderings can't drift).
-  const identitySpans = prParts?.identity.map((seg, i) => (
+  const segmentSpans = prSegments?.map((seg, i) => (
     <span key={seg.text}>
       {i > 0 && <span className="text-text-secondary">{" · "}</span>}
       <span className={seg.color}>{seg.text}</span>
     </span>
   ));
-  // The health facts continue as plain text; the register's `review: ` lead is
-  // dropped so the line reads `checks pass · approved` (the card's approved
-  // shape), while the PANE panel keeps the full segment text unchanged.
-  const healthText = prParts?.health.map((seg) => seg.text.replace(/^review: /, "")).join(" · ");
-  const fetchedAtEpoch = prFetchedAtEpoch(win);
   // Drives both the body block and the action list's `flush` spacing — they
   // must agree, or the card grows a gap with nothing in it.
-  const hasBody = Boolean(fabParts || prParts);
+  const hasBody = Boolean(fabParts || prSegments);
   // The fork row keeps the DOUBLE gate: a forkable window AND a wired handler.
   // Derived as a narrowed handler (not a boolean) so the ForkActionRow call
   // site type-checks structurally instead of leaning on aliased-condition
@@ -658,7 +626,7 @@ export function WindowFlyoutContent({
               )}
             </>
           )}
-          {prParts && (
+          {prSegments && (
             <>
               {/* `pr` register — open-first when a URL exists (the panel's
                   PrLinkRow idiom): the identity line is a real anchor (native
@@ -687,7 +655,7 @@ export function WindowFlyoutContent({
                 >
                   <span className="text-text-secondary shrink-0">{"pr\u00a0\u00a0"}</span>
                   <span data-testid="row-flyout-pr" className="min-w-0 truncate">
-                    {identitySpans}
+                    {segmentSpans}
                   </span>
                   {/* NBSP inside the span — the anchor is a flex container, so a
                       whitespace-only text node between flex items would be dropped. */}
@@ -695,18 +663,8 @@ export function WindowFlyoutContent({
                 </a>
               ) : (
                 <RegisterLine prefix={"pr\u00a0\u00a0"} testid="row-flyout-pr">
-                  {identitySpans}
+                  {segmentSpans}
                 </RegisterLine>
-              )}
-              {healthText && (
-                <ContinuationLine testid="row-flyout-pr-health">{healthText}</ContinuationLine>
-              )}
-              {/* Freshness is the PR poll's age, so it lives inside the `pr`
-                  group — a `prFetchedAt` with no `prNumber` renders nothing. */}
-              {fetchedAtEpoch !== null && (
-                <ContinuationLine>
-                  <FreshnessLine fetchedAtEpoch={fetchedAtEpoch} />
-                </ContinuationLine>
               )}
             </>
           )}

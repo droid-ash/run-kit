@@ -152,9 +152,9 @@ test.describe("Row flyout card (fine pointer)", () => {
     // Content: the identity title bar (`Window @N · pane %N · N panes`, the
     // card's first element, carrying ONLY the ⓘ docs affordance on its right
     // edge — actions live in the sectioned rows at the card's bottom), then
-    // the DEMOTED dot-label body line (hue word + status word +
-    // waiting suffix — no PR words; the pr register below carries the PR) +
-    // the four registers + freshness + links.
+    // the four registers grouped under two labelled bands ("right now" /
+    // "this change") with the long values on indented continuation lines
+    // (the fab slug, the PR health segments, freshness) + links.
     const titleBar = page.getByTestId("popup-title-bar");
     await expect(titleBar).toContainText("Window @1 · pane %425 · 2 panes");
     await expect(titleBar.getByTestId("row-flyout-docs-link")).toBeVisible();
@@ -180,15 +180,28 @@ test.describe("Row flyout card (fine pointer)", () => {
     expect(colorBox.y).toBeLessThan(forkBox.y);
     expect(forkBox.y).toBeLessThan(pinBox.y);
     expect(pinBox.y).toBeLessThan(killBox.y);
-    const cardText = (await card(page).innerText()).replaceAll("\n", " ");
-    expect(cardText.indexOf("Window @1")).toBeLessThan(cardText.indexOf("building — active"));
-    await expect(card(page)).toContainText("building — active — agent waiting 3m");
+    // Band order: title bar, then "right now", then "this change". The dot's
+    // label ("building — active") is NOT restated as a body line — the dot on
+    // the anchored row carries it as its accessible name. innerText applies
+    // the headings' CSS `uppercase`, so the order probe lowercases first.
+    const cardText = (await card(page).innerText()).replaceAll("\n", " ").toLowerCase();
+    expect(cardText.indexOf("window @1")).toBeLessThan(cardText.indexOf("right now"));
+    expect(cardText.indexOf("right now")).toBeLessThan(cardText.indexOf("this change"));
+    await expect(page.getByTestId("row-flyout-band-now")).toHaveText("right now");
+    await expect(page.getByTestId("row-flyout-band-change")).toHaveText("this change");
+    await expect(card(page)).not.toContainText("building — active");
     await expect(page.getByTestId("row-flyout-out")).toContainText("out");
     await expect(page.getByTestId("row-flyout-agt")).toContainText("waiting 3m");
-    await expect(page.getByTestId("row-flyout-fab")).toContainText(
-      "93dy window-row-pr-glyph-register-flyout · apply · active",
+    // Critical tokens lead the fab register; the expendable slug trails on an
+    // indented continuation line where truncation costs nothing.
+    await expect(page.getByTestId("row-flyout-fab")).toContainText("93dy · apply · active");
+    await expect(page.getByTestId("row-flyout-fab-slug")).toContainText(
+      "window-row-pr-glyph-register-flyout",
     );
-    await expect(page.getByTestId("row-flyout-pr")).toContainText("#386");
+    // The pr register splits identity from health: number + state (+ ↗) on the
+    // first line, checks/review on a continuation line, freshness below that.
+    await expect(page.getByTestId("row-flyout-pr")).toContainText("#386 · open");
+    await expect(page.getByTestId("row-flyout-pr-health")).toContainText("checks pass · review: approved");
     await expect(page.getByTestId("row-flyout-checked")).toContainText(/checked \d+\w+ ago/);
     // The pr register LINE itself is the open-first anchor (PrLinkRow idiom):
     // it wraps the segments and carries an always-visible inline ↗.
@@ -224,18 +237,18 @@ test.describe("Row flyout card (fine pointer)", () => {
     expect(cardBox.y).toBeLessThan(rowBox.y + rowBox.height + 8);
     expect(cardBox.y + cardBox.height).toBeGreaterThan(rowBox.y - 8);
 
-    // No line paints OUTSIDE the max-w-xs card box: the mocked fab register
-    // ("…window-row-pr-glyph-register-flyout · apply · active") is wider than
-    // the card, so without `truncate` on the register lines the card's
-    // scrollWidth exceeds its clientWidth (the cycle-1 regression measured
-    // 435 vs 318). Truncated lines keep content inside the box.
+    // No line paints OUTSIDE the max-w-xs card box: the mocked fab slug
+    // continuation ("window-row-pr-glyph-register-flyout") is the card's
+    // widest line, so without `truncate` on the register/continuation lines
+    // the card's scrollWidth exceeds its clientWidth (the cycle-1 regression
+    // measured 435 vs 318). Truncated lines keep content inside the box.
     const overflow = await card(page).evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
   test("moving between rows retargets the card (warm window, single card)", async ({ page }) => {
     await prRow(page).hover();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("Window @1");
 
     // Sweep to the sibling row: the first card closes and the sibling's opens
     // (warm retarget — no strobing, never two cards). The pane-less scratch
@@ -326,7 +339,7 @@ test.describe("Row flyout card (fine pointer)", () => {
   }) => {
     await prRow(page).focus();
     await expect(card(page)).toBeVisible();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("right now");
 
     // The card's links are Tab-reachable from the focused row
     // (FloatingFocusManager modal={false} + the portal's tab-order guards).
@@ -431,7 +444,7 @@ test.describe("Row flyout card (coarse pointer)", () => {
     // (@1's select would navigate to /default/1).
     await prRail.tap();
     await expect(card(page)).toBeVisible();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("right now");
     // The card is the coarse color/pin/kill home — and fork's only home.
     // `Change color…` leads the action rows on every tier (260817-ve5m).
     const colorRow = card(page).getByTestId("row-flyout-color-action");
@@ -534,7 +547,7 @@ test.describe("Row flyout card (coarse pointer)", () => {
     await page.mouse.move(railBox.x + railBox.width / 2, railBox.y + railBox.height / 2);
     await page.mouse.down();
     await expect(card(page)).toBeVisible();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("right now");
 
     const scratchBox = (await scratchRow(page).boundingBox())!;
     await page.mouse.move(scratchBox.x + scratchBox.width / 2, scratchBox.y + scratchBox.height / 2, {

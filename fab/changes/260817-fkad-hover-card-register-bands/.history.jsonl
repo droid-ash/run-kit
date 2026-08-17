@@ -1,0 +1,9 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-08-17T12:24:23Z"}
+{"args":"Reorganize the window hover card's register block (Option B): reorder each register so critical tokens come first and only expendable text truncates (the fab line currently needs 43 chars in a 42-char card and drops the stage), move the PR freshness onto the PR line it describes, drop the redundant status-label line that echoes the hovered dot and can contradict the PR line, and group the remaining registers under two labelled bands — 'right now' (out/agt) and 'this change' (fab/pr).","cmd":"fab-new","event":"command","ts":"2026-08-17T12:24:23Z"}
+{"delta":"+4.8","event":"confidence","score":4.8,"trigger":"calc-score","ts":"2026-08-17T12:25:59Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-08-17T12:31:02Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-08-17T12:31:02Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-08-17T13:15:24Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-08-17T13:41:47Z"}
+{"event":"review","result":"passed","ts":"2026-08-17T13:41:47Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-08-17T13:47:27Z"}

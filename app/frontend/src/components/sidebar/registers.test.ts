@@ -1,12 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { getOutputLine, getAgentLine, getFabLine, getPrSegments } from "./registers";
+import {
+  getOutputLine,
+  getAgentLine,
+  getFabLine,
+  getPrSegments,
+  getOutputParts,
+  getAgentParts,
+  getFabParts,
+  getPrParts,
+} from "./registers";
 import { makeWindow, makeWindowWithPanes } from "@/test-utils/fixtures";
 
 // 93dy: the register-line resolvers were extracted from status-panel.tsx into
 // this shared module so the PANE panel and the row-hover flyout card render
 // from one source. These tests pin the extracted behavior (the panel's own
 // rendering coverage lives in status-panel.test.tsx and must keep passing
-// unchanged).
+// unchanged). The joined strings are now formatters over the parts resolvers;
+// both forms are pinned here so the panel's byte-identical output cannot drift.
 
 describe("getOutputLine (L0)", () => {
   it("active window with a command: 'active · <command>'", () => {
@@ -34,6 +44,36 @@ describe("getOutputLine (L0)", () => {
   });
 });
 
+describe("getOutputParts (L0)", () => {
+  it("active: command + active flag, no idleDuration", () => {
+    expect(getOutputParts(makeWindowWithPanes({ activity: "active" }), 1000)).toEqual({
+      command: "zsh",
+      active: true,
+    });
+  });
+
+  it("idle: command + formatted idleDuration", () => {
+    expect(getOutputParts(makeWindowWithPanes({ activity: "idle", activityTimestamp: 970 }), 1000)).toEqual({
+      command: "zsh",
+      active: false,
+      idleDuration: "30s",
+    });
+  });
+
+  it("idle without a timestamp: no idleDuration", () => {
+    expect(getOutputParts(makeWindow({ activity: "idle", activityTimestamp: 0 }), 1000)).toEqual({
+      command: "",
+      active: false,
+    });
+  });
+
+  it("the joined line is a formatter over the parts (byte-identical)", () => {
+    const win = makeWindowWithPanes({ activity: "idle", activityTimestamp: 970 });
+    const parts = getOutputParts(win, 1000);
+    expect(getOutputLine(win, 1000)).toBe(`${parts.command} — idle ${parts.idleDuration} since last output`);
+  });
+});
+
 describe("getAgentLine (L1)", () => {
   it("null when no agentState", () => {
     expect(getAgentLine(makeWindow({}))).toBeNull();
@@ -47,6 +87,23 @@ describe("getAgentLine (L1)", () => {
 
   it("bare state when no duration (active agents have none)", () => {
     expect(getAgentLine(makeWindow({ agentState: "active" }))).toBe("active");
+  });
+});
+
+describe("getAgentParts (L1)", () => {
+  it("null when no agentState", () => {
+    expect(getAgentParts(makeWindow({}))).toBeNull();
+  });
+
+  it("state + idleDuration when present", () => {
+    expect(getAgentParts(makeWindow({ agentState: "waiting", agentIdleDuration: "3m" }))).toEqual({
+      state: "waiting",
+      idleDuration: "3m",
+    });
+  });
+
+  it("bare state when no duration", () => {
+    expect(getAgentParts(makeWindow({ agentState: "active" }))).toEqual({ state: "active" });
   });
 });
 
@@ -71,6 +128,36 @@ describe("getFabLine (L2)", () => {
         makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "review", fabDisplayState: "failed" }),
       ),
     ).toBe("93dy row-flyout · review · failed");
+  });
+});
+
+describe("getFabParts (L2)", () => {
+  it("null when no fab change or no stage", () => {
+    expect(getFabParts(makeWindow({}))).toBeNull();
+    expect(getFabParts(makeWindow({ fabChange: "260805-93dy-row-flyout" }))).toBeNull();
+  });
+
+  it("id, slug and stage as separate fields; displayState optional", () => {
+    expect(
+      getFabParts(
+        makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "review", fabDisplayState: "active" }),
+      ),
+    ).toEqual({ id: "93dy", slug: "row-flyout", stage: "review", displayState: "active" });
+    expect(getFabParts(makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "apply" }))).toEqual({
+      id: "93dy",
+      slug: "row-flyout",
+      stage: "apply",
+    });
+  });
+
+  it("the joined line is a formatter over the parts (byte-identical)", () => {
+    const win = makeWindow({
+      fabChange: "260805-93dy-row-flyout",
+      fabStage: "review",
+      fabDisplayState: "active",
+    });
+    const parts = getFabParts(win)!;
+    expect(getFabLine(win)).toBe(`${parts.id} ${parts.slug} · ${parts.stage} · ${parts.displayState}`);
   });
 });
 
@@ -113,5 +200,42 @@ describe("getPrSegments (L3)", () => {
     );
     expect(segs?.[2]).toEqual({ text: "checks fail", color: "text-signal-red" });
     expect(segs?.[3]).toEqual({ text: "review: changes requested", color: "text-signal-red" });
+  });
+});
+
+describe("getPrParts (L3)", () => {
+  it("null without a prNumber", () => {
+    expect(getPrParts(makeWindow({}))).toBeNull();
+  });
+
+  it("identity carries number + state; health carries checks + review", () => {
+    expect(
+      getPrParts(makeWindow({ prNumber: 540, prState: "open", prChecks: "pending", prReview: "changes_requested" })),
+    ).toEqual({
+      identity: [
+        { text: "#540", color: "text-text-primary" },
+        { text: "open", color: "text-accent-green" },
+      ],
+      health: [
+        { text: "checks pending", color: "text-signal-yellow" },
+        { text: "review: changes requested", color: "text-signal-red" },
+      ],
+    });
+  });
+
+  it("merged PR: identity only, empty health", () => {
+    expect(getPrParts(makeWindow({ prNumber: 540, prState: "merged" }))).toEqual({
+      identity: [
+        { text: "#540", color: "text-text-primary" },
+        { text: "merged", color: "text-signal-purple" },
+      ],
+      health: [],
+    });
+  });
+
+  it("the joined segments are identity then health (byte-identical)", () => {
+    const win = makeWindow({ prNumber: 241, prState: "open", prChecks: "pass", prReview: "approved" });
+    const parts = getPrParts(win)!;
+    expect(getPrSegments(win)).toEqual([...parts.identity, ...parts.health]);
   });
 });

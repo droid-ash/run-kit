@@ -16,11 +16,9 @@ import {
   safePolygon,
   autoUpdate,
 } from "@floating-ui/react";
-import { statusDotState } from "@/components/pr-status-model";
-import { dotLabel } from "@/components/status-dot-label";
 import { PinIcon } from "@/components/pin-icon";
 import { CloseIcon, PaletteIcon } from "./icons";
-import { getOutputLine, getAgentLine, getFabLine, getPrSegments } from "./registers";
+import { getOutputLine, getAgentLine, getFabParts, getPrParts, type PrSegment } from "./registers";
 import { PopupTitleBar, PopupTitleBarSecondary, notchFill } from "./popup-title-bar";
 import { formatDuration } from "@/lib/format";
 import { useNow } from "@/hooks/use-now";
@@ -46,10 +44,13 @@ import type { WindowInfo } from "@/types";
  * The window card's content is the
  * full four-register view (`out`/`agt`/`fab`/`pr`) promoted from the PANE
  * panel, resolved by the SHARED helpers in ./registers.ts (one source, no
- * drift), plus the identity title bar (`Window @N · pane %N · N panes` — the
+ * drift) and grouped under two labelled bands — "right now" (`out`/`agt`)
+ * and "this change" (`fab`/`pr`) — with long values (the fab slug, the PR
+ * health segments, the "checked Xs ago" freshness line) on indented
+ * continuation lines where truncation costs nothing, plus the identity title
+ * bar (`Window @N · pane %N · N panes` — the
  * shared `PopupTitleBar` chrome, carrying only the ⓘ docs affordance on its
- * right edge), the demoted dot-label body line, the "checked Xs ago" freshness
- * line, the "Open PR #N ↗" link, and the sectioned action rows (change color /
+ * right edge), the "Open PR #N ↗" link, and the sectioned action rows (change color /
  * fork / pin / kill with sub-hints — one home per action, both pointer
  * worlds). Session/server cards carry the same chrome with their own title,
  * one facts line, and their own action rows. Registers are read-only text;
@@ -338,14 +339,16 @@ export function prFetchedAtEpoch(win: WindowInfo): number | null {
  * Freshness line ("checked Xs ago"), its OWN component so its live `useNow()`
  * clock is scoped to the leaf that displays it (use-now.ts contract). Mounted
  * only inside the open card, so the 1/s re-render fires only while the card is
- * open. Returns null when there is no fetch timestamp. (Migrated verbatim from
- * status-dot-tip.tsx; only the testid is renamed to the flyout vocabulary.)
+ * open. Returns null when there is no fetch timestamp. Renders as a
+ * continuation line of the `pr` register — indented to the value column like
+ * `ContinuationLine`. (Migrated from status-dot-tip.tsx; only the testid is
+ * renamed to the flyout vocabulary.)
  */
 export function FreshnessLine({ fetchedAtEpoch }: { fetchedAtEpoch: number | null }) {
   const nowSeconds = useNow();
   if (fetchedAtEpoch === null) return null;
   return (
-    <span className="text-text-secondary whitespace-nowrap" data-testid="row-flyout-checked">
+    <span className="min-w-0 truncate pl-[4ch] text-text-secondary" data-testid="row-flyout-checked">
       {`checked ${formatDuration(nowSeconds - fetchedAtEpoch)} ago`}
     </span>
   );
@@ -369,6 +372,40 @@ function RegisterLine({
   return (
     <span className="min-w-0 truncate" data-testid={testid}>
       <span className="text-text-secondary">{prefix}</span>
+      {children}
+    </span>
+  );
+}
+
+/** A band heading grouping the registers ("right now" / "this change") —
+ *  quiet chrome, smaller and quieter than the register text. The caller gates
+ *  it on the band having content, so an empty band leaves no empty heading. */
+function BandHeading({
+  label,
+  testid,
+  className = "",
+}: {
+  label: string;
+  testid: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`text-[10px] uppercase tracking-wider text-text-secondary ${className}`}
+      data-testid={testid}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** A register's expendable long value on its own line, indented to the value
+ *  column (the 4-advance prefix width — 4ch in the card's monospace). The
+ *  decisive tokens already lead on the register's first line, so truncation
+ *  here costs nothing. */
+function ContinuationLine({ testid, children }: { testid: string; children: ReactNode }) {
+  return (
+    <span className="min-w-0 truncate pl-[4ch] text-text-secondary" data-testid={testid}>
       {children}
     </span>
   );
@@ -540,9 +577,10 @@ function WindowFlyoutTitle({ win }: { win: WindowInfo }) {
 /**
  * The window tier's card body — mounted ONLY while the flyout is open, so its
  * `useNow()` clock (feeding the `out` register's elapsed) is leaf-scoped per
- * the render-performance contract. Absent layers render as absent (a plain
- * shell pane shows only `out`). The consuming WindowRow builds this via the
- * hook's `content` render prop.
+ * the render-performance contract. Absent layers render as absent, and a band
+ * without content renders no heading (a plain shell pane shows "right now"
+ * with only `out`, and no second band). The consuming WindowRow builds this
+ * via the hook's `content` render prop.
  */
 export function WindowFlyoutContent({
   win,
@@ -566,26 +604,37 @@ export function WindowFlyoutContent({
   onKillAction?: () => void;
 }) {
   const nowSeconds = useNow();
-  const state = statusDotState(win);
-  const label = dotLabel(win, state);
   const outputLine = getOutputLine(win, nowSeconds);
   const agentLine = getAgentLine(win);
-  const fabLine = getFabLine(win);
-  const prSegments = getPrSegments(win);
-  // Single-sourced segment JSX shared by the anchor and plain branches below
-  // (the panel's segmentSpans idiom — the two renderings can't drift).
-  const segmentSpans = prSegments?.map((seg, i) => (
-    <span key={seg.text}>
-      {i > 0 && <span className="text-text-secondary">{" · "}</span>}
-      <span className={seg.color}>{seg.text}</span>
-    </span>
-  ));
+  const fabParts = getFabParts(win);
+  const prParts = getPrParts(win);
+  // Critical tokens lead; the expendable slug trails onto a continuation line
+  // where truncation costs nothing — the card is ~42 chars wide, and the
+  // joined `<id> <slug> · <stage>` form truncated the stage, the reason the
+  // card was opened.
+  const fabFirstLine = fabParts
+    ? `${fabParts.id} · ${fabParts.stage}${fabParts.displayState ? ` · ${fabParts.displayState}` : ""}`
+    : null;
+  // Single-sourced segment JSX shared by every PR rendering below (the panel's
+  // segmentSpans idiom — the renderings can't drift).
+  const toSegmentSpans = (segments: PrSegment[]) =>
+    segments.map((seg, i) => (
+      <span key={seg.text}>
+        {i > 0 && <span className="text-text-secondary">{" · "}</span>}
+        <span className={seg.color}>{seg.text}</span>
+      </span>
+    ));
+  const prIdentitySpans = prParts ? toSegmentSpans(prParts.identity) : null;
+  const prHealthSpans = prParts && prParts.health.length > 0 ? toSegmentSpans(prParts.health) : null;
   const fetchedAtEpoch = prFetchedAtEpoch(win);
   // The fork row keeps the DOUBLE gate: a forkable window AND a wired handler.
   // Derived as a narrowed handler (not a boolean) so the ForkActionRow call
   // site type-checks structurally instead of leaning on aliased-condition
   // narrowing, which a refactor could silently break.
   const forkHandler = canForkWindow(win) ? onFork : undefined;
+  // Band two ("this change") renders only when it has content — a plain shell
+  // pane gets band one alone, never an empty heading.
+  const showChangeBand = Boolean(fabParts || prParts || win.prUrl);
 
   return (
     <>
@@ -611,15 +660,14 @@ export function WindowFlyoutContent({
       >
         <WindowFlyoutTitle win={win} />
       </PopupTitleBar>
-      {/* Status label demoted to the first body line — still single-sourced
-          with the status dot's aria-label via the shared dotLabel import. */}
-      <span className="text-text-primary whitespace-nowrap">{label}</span>
       {/* The four orthogonal signal registers (status-pyramid.md), promoted
-          from the PANE panel via the shared resolvers. Read-only text except
-          the `pr` register, which is open-first (the line is a real anchor)
-          exactly like the panel's PrLinkRow — the register is open-first
-          everywhere it renders. The tip's former standalone `agent:` line is
-          subsumed by `agt`. */}
+          from the PANE panel via the shared resolvers, grouped under two
+          bands: "right now" (this second) and "this change" (where the work
+          has got to). Read-only text except the `pr` register, which is
+          open-first (a real anchor) exactly like the panel's PrLinkRow — the
+          register is open-first everywhere it renders. The tip's former
+          standalone `agent:` line is subsumed by `agt`. */}
+      <BandHeading label="right now" testid="row-flyout-band-now" />
       <RegisterLine prefix="out " testid="row-flyout-out">
         <span className="text-text-secondary">{outputLine}</span>
       </RegisterLine>
@@ -628,57 +676,78 @@ export function WindowFlyoutContent({
           <span className="text-text-secondary">{agentLine}</span>
         </RegisterLine>
       )}
-      {fabLine && (
-        <RegisterLine prefix="fab " testid="row-flyout-fab">
-          <span className="text-text-primary">{fabLine}</span>
-        </RegisterLine>
-      )}
-      {/* `pr` register — open-first when a URL exists (the panel's PrLinkRow
-          idiom): the WHOLE line is a real anchor (native middle/Ctrl+click,
-          right-click → copy link) with an always-visible inline `↗` sitting
-          shrink-0 after the truncating segment span, so it hugs the text end
-          and is never eaten by truncation. stopPropagation so opening the PR
-          never selects the underlying row. Without a URL the line stays plain
-          read-only text (`prUrl`/`prNumber` are independently optional — a
-          URL-less number gets the plain line, a number-less URL a bare
-          "open PR" anchor).
-          Prefix: "pr" + 2 NBSPs = the same 4-advance column as `out `/`agt `/
-          `fab ` (and status-panel.tsx's pr rows). Escape sequences, never
-          literal NBSPs - a literal survives careless re-encoding badly (the
-          cycle-1 mojibake). Codepoints pinned by a unit test. */}
-      {win.prUrl ? (
-        <a
-          href={win.prUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={win.prUrl}
-          aria-label={win.prNumber ? `Open PR #${win.prNumber} in a new tab` : "Open PR in a new tab"}
-          onClick={(e) => e.stopPropagation()}
-          className="group/pr flex items-center min-w-0 hover:bg-bg-inset focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent coarse:py-1"
-          data-testid="row-flyout-pr-link"
-        >
-          <span className="text-text-secondary shrink-0">{"pr\u00a0\u00a0"}</span>
-          {segmentSpans ? (
-            <span data-testid="row-flyout-pr" className="min-w-0 truncate">
-              {segmentSpans}
-            </span>
-          ) : (
-            <span className="min-w-0 truncate text-text-secondary">open PR</span>
+      {showChangeBand && (
+        <>
+          <BandHeading label="this change" testid="row-flyout-band-change" className="mt-1" />
+          {fabParts && (
+            <>
+              <RegisterLine prefix="fab " testid="row-flyout-fab">
+                <span className="text-text-primary">{fabFirstLine}</span>
+              </RegisterLine>
+              {fabParts.slug && (
+                <ContinuationLine testid="row-flyout-fab-slug">{fabParts.slug}</ContinuationLine>
+              )}
+            </>
           )}
-          {/* NBSP inside the span — the anchor is a flex container, so a
-              whitespace-only text node between flex items would be dropped. */}
-          <span className="shrink-0 text-text-secondary group-hover/pr:text-text-primary">{"\u00a0↗"}</span>
-        </a>
-      ) : (
-        segmentSpans && (
-          <RegisterLine prefix={"pr\u00a0\u00a0"} testid="row-flyout-pr">
-            {segmentSpans}
-          </RegisterLine>
-        )
+          {/* `pr` register — identity (number, state) on the first line, the
+              health segments (checks, review) on a continuation line below,
+              freshness as a further continuation line gated on the register
+              itself (a `prFetchedAt` with no `prNumber` renders no orphan
+              line). Open-first when a URL exists (the panel's PrLinkRow
+              idiom): the identity line is a real anchor (native
+              middle/Ctrl+click, right-click → copy link) with an
+              always-visible inline `↗` sitting shrink-0 after the truncating
+              segment span, so it hugs the text end and is never eaten by
+              truncation; the health continuation stays plain text so the
+              anchor never spans two visual rows. stopPropagation so opening
+              the PR never selects the underlying row. Without a URL the line
+              stays plain read-only text (`prUrl`/`prNumber` are independently
+              optional — a URL-less number gets the plain line, a number-less
+              URL a bare "open PR" anchor).
+              Prefix: "pr" + 2 NBSPs = the same 4-advance column as `out `/`agt `/
+              `fab ` (and status-panel.tsx's pr rows). Escape sequences, never
+              literal NBSPs - a literal survives careless re-encoding badly (the
+              cycle-1 mojibake). Codepoints pinned by a unit test. */}
+          {(prParts || win.prUrl) && (
+            <>
+              {win.prUrl ? (
+                <a
+                  href={win.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={win.prUrl}
+                  aria-label={win.prNumber ? `Open PR #${win.prNumber} in a new tab` : "Open PR in a new tab"}
+                  onClick={(e) => e.stopPropagation()}
+                  className="group/pr flex items-center min-w-0 hover:bg-bg-inset focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent coarse:py-1"
+                  data-testid="row-flyout-pr-link"
+                >
+                  <span className="text-text-secondary shrink-0">{"pr\u00a0\u00a0"}</span>
+                  {prIdentitySpans ? (
+                    <span data-testid="row-flyout-pr" className="min-w-0 truncate">
+                      {prIdentitySpans}
+                    </span>
+                  ) : (
+                    <span className="min-w-0 truncate text-text-secondary">open PR</span>
+                  )}
+                  {/* NBSP inside the span — the anchor is a flex container, so a
+                      whitespace-only text node between flex items would be dropped. */}
+                  <span className="shrink-0 text-text-secondary group-hover/pr:text-text-primary">{"\u00a0↗"}</span>
+                </a>
+              ) : (
+                prIdentitySpans && (
+                  <RegisterLine prefix={"pr\u00a0\u00a0"} testid="row-flyout-pr">
+                    {prIdentitySpans}
+                  </RegisterLine>
+                )
+              )}
+              {prHealthSpans && (
+                <ContinuationLine testid="row-flyout-pr-health">{prHealthSpans}</ContinuationLine>
+              )}
+              {prParts && <FreshnessLine fetchedAtEpoch={fetchedAtEpoch} />}
+            </>
+          )}
+        </>
       )}
-      {/* Ambient "PR checked Xs ago" trust signal; omitted without a joined
-          PR-status timestamp. Leaf-scoped clock inside the open card. */}
-      <FreshnessLine fetchedAtEpoch={fetchedAtEpoch} />
       {/* Sectioned action rows — the card's last block, rendered for ALL
           pointer types: the color/pin/kill home on coarse (where the in-row
           cluster is fine-pointer-only), additive + Tab-reachable on desktop

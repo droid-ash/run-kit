@@ -12,6 +12,22 @@ import type { WindowInfo } from "@/types";
  * functions over the streamed `WindowInfo`; no React.
  */
 
+export type OutputParts = { command: string; active: boolean; idleDuration?: string };
+
+/** Structured form of the L0 `out` register — the card composes its own
+ *  layout from these. */
+export function getOutputParts(win: WindowInfo, nowSeconds: number): OutputParts {
+  const command = win.panes?.find((p) => p.isActive)?.command ?? win.paneCommand ?? "";
+  if (win.activity === "active") return { command, active: true };
+
+  let idleDuration: string | undefined;
+  if (win.activityTimestamp) {
+    const elapsed = nowSeconds - win.activityTimestamp;
+    if (elapsed > 0) idleDuration = formatDuration(elapsed);
+  }
+  return { command, active: false, idleDuration };
+}
+
 /**
  * Build the L0 `out` register string. L0 speaks about bytes, not intent:
  * `active · <command>` while output flows, else `<command> — idle Xm since
@@ -22,26 +38,45 @@ import type { WindowInfo } from "@/types";
  * § Duration-Text Ladder).
  */
 export function getOutputLine(win: WindowInfo, nowSeconds: number): string {
-  const command = win.panes?.find((p) => p.isActive)?.command ?? win.paneCommand ?? "";
-  if (win.activity === "active") return command ? `active · ${command}` : "active";
+  const { command, active, idleDuration } = getOutputParts(win, nowSeconds);
+  if (active) return command ? `active · ${command}` : "active";
 
-  let idle = "";
-  if (win.activityTimestamp) {
-    const elapsed = nowSeconds - win.activityTimestamp;
-    if (elapsed > 0) idle = formatDuration(elapsed);
-  }
-  const idleText = idle ? `idle ${idle} since last output` : "";
+  const idleText = idleDuration ? `idle ${idleDuration} since last output` : "";
   if (command && idleText) return `${command} — ${idleText}`;
   if (idleText) return idleText;
   return command || "idle";
 }
 
+export type AgentParts = { state: string; idleDuration?: string };
+
+/** Structured form of the L1 `agt` register. Null when no `agentState`. */
+export function getAgentParts(win: WindowInfo): AgentParts | null {
+  if (!win.agentState) return null;
+  return { state: win.agentState, idleDuration: win.agentIdleDuration || undefined };
+}
+
 /** Build the L1 `agt` register string when an agent is present: e.g.
  *  `waiting 3m` / `active` / `idle 12m`. Null when no `agentState`. */
 export function getAgentLine(win: WindowInfo): string | null {
-  if (!win.agentState) return null;
-  if (win.agentIdleDuration) return `${win.agentState} ${win.agentIdleDuration}`;
-  return win.agentState;
+  const parts = getAgentParts(win);
+  if (!parts) return null;
+  if (parts.idleDuration) return `${parts.state} ${parts.idleDuration}`;
+  return parts.state;
+}
+
+export type FabParts = { id: string; slug: string; stage: string; displayState?: string };
+
+/** Structured form of the L2 `fab` register. Null when the window has no
+ *  parseable fab change or no stage. */
+export function getFabParts(win: WindowInfo): FabParts | null {
+  const fabChange = parseFabChange(win.fabChange ?? "");
+  if (!fabChange || !win.fabStage) return null;
+  return {
+    id: fabChange.id,
+    slug: fabChange.slug,
+    stage: win.fabStage,
+    displayState: win.fabDisplayState || undefined,
+  };
 }
 
 /** Build the L2 `fab` register string: `<id> <slug> · <stage>[ ·
@@ -49,14 +84,43 @@ export function getAgentLine(win: WindowInfo): string | null {
  *  (`fab pane map` may omit it on older binaries). Null when the window has no
  *  parseable fab change or no stage. */
 export function getFabLine(win: WindowInfo): string | null {
-  const fabChange = parseFabChange(win.fabChange ?? "");
-  if (!fabChange || !win.fabStage) return null;
-  return `${fabChange.id} ${fabChange.slug} · ${win.fabStage}${
-    win.fabDisplayState ? ` · ${win.fabDisplayState}` : ""
+  const parts = getFabParts(win);
+  if (!parts) return null;
+  return `${parts.id} ${parts.slug} · ${parts.stage}${
+    parts.displayState ? ` · ${parts.displayState}` : ""
   }`;
 }
 
 export type PrSegment = { text: string; color: string };
+
+export type PrParts = { identity: PrSegment[]; health: PrSegment[] };
+
+/** Structured form of the L3 `PR` register: the identity segments (number,
+ *  state) split from the health segments (checks, review), so the card can lay
+ *  the two groups out on separate lines. Same gating and suppression rules as
+ *  the joined form below. */
+export function getPrParts(win: WindowInfo): PrParts | null {
+  if (!win.prNumber) return null;
+  const identity: PrSegment[] = [{ text: `#${win.prNumber}`, color: "text-text-primary" }];
+  if (win.prState) {
+    identity.push({
+      text: `${win.prState}${win.prIsDraft ? " (draft)" : ""}`,
+      color: PR_STATE_COLORS[win.prState],
+    });
+  }
+  const health: PrSegment[] = [];
+  const isOpen = !win.prState || win.prState === "open";
+  if (isOpen && win.prChecks && win.prChecks !== "none") {
+    health.push({ text: `checks ${win.prChecks}`, color: PR_CHECKS_COLORS[win.prChecks] });
+  }
+  if (isOpen && win.prReview && win.prReview !== "none") {
+    health.push({
+      text: `review: ${win.prReview.replace(/_/g, " ")}`,
+      color: PR_REVIEW_COLORS[win.prReview],
+    });
+  }
+  return { identity, health };
+}
 
 /**
  * Build the L3 `PR` register line as colored segments, e.g.
@@ -76,23 +140,7 @@ export type PrSegment = { text: string; color: string };
  * flipped to ready) and keeps the PR surfaces consistent.
  */
 export function getPrSegments(win: WindowInfo): PrSegment[] | null {
-  if (!win.prNumber) return null;
-  const segments: PrSegment[] = [{ text: `#${win.prNumber}`, color: "text-text-primary" }];
-  if (win.prState) {
-    segments.push({
-      text: `${win.prState}${win.prIsDraft ? " (draft)" : ""}`,
-      color: PR_STATE_COLORS[win.prState],
-    });
-  }
-  const isOpen = !win.prState || win.prState === "open";
-  if (isOpen && win.prChecks && win.prChecks !== "none") {
-    segments.push({ text: `checks ${win.prChecks}`, color: PR_CHECKS_COLORS[win.prChecks] });
-  }
-  if (isOpen && win.prReview && win.prReview !== "none") {
-    segments.push({
-      text: `review: ${win.prReview.replace(/_/g, " ")}`,
-      color: PR_REVIEW_COLORS[win.prReview],
-    });
-  }
-  return segments;
+  const parts = getPrParts(win);
+  if (!parts) return null;
+  return [...parts.identity, ...parts.health];
 }

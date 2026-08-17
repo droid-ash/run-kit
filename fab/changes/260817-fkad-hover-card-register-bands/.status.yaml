@@ -9,8 +9,8 @@ progress:
     apply: done
     review: done
     hydrate: done
-    ship: active
-    review-pr: pending
+    ship: done
+    review-pr: active
 plan:
     generated: true
     task_count: 15
@@ -33,22 +33,24 @@ stage_metrics:
     apply: {started_at: "2026-08-17T12:31:02Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T13:15:24Z"}
     review: {started_at: "2026-08-17T13:15:24Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T13:41:47Z"}
     hydrate: {started_at: "2026-08-17T13:41:47Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T13:47:27Z"}
-    ship: {started_at: "2026-08-17T13:47:27Z", driver: fab-fff, iterations: 1}
-prs: []
+    ship: {started_at: "2026-08-17T13:47:27Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T13:50:34Z"}
+    review-pr: {started_at: "2026-08-17T13:50:34Z", driver: git-pr, iterations: 1}
+prs:
+    - https://github.com/sahil87/run-kit/pull/645
 true_impact:
-    added: 5
-    deleted: 3
-    net: 2
+    added: 1040
+    deleted: 197
+    net: 843
     excluding:
-        added: 0
-        deleted: 0
-        net: 0
+        added: 499
+        deleted: 184
+        net: 315
     tests:
-        added: 0
-        deleted: 0
-        net: 0
-    computed_at: "2026-08-17T13:47:27Z"
-    computed_at_stage: hydrate
+        added: 157
+        deleted: 20
+        net: 137
+    computed_at: "2026-08-17T13:50:34Z"
+    computed_at_stage: ship
 summary: hover card registers grouped under 'right now'/'this change' bands with continuation lines; resolvers split into parts + byte-identical formatters; dot-label body line removed; freshness gated on the pr register
 # true_impact: lazily created on first stage-finish that computes it (no placeholder here).
-last_updated: 2026-08-17T13:47:27Z
+last_updated: 2026-08-17T13:50:34Z

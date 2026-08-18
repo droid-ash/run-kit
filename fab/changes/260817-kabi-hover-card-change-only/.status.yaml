@@ -1,0 +1,56 @@
+id: kabi
+name: 260817-kabi-hover-card-change-only
+created: 2026-08-17T14:54:11Z
+created_by: droid-ash
+change_type: refactor
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: done
+plan:
+    generated: true
+    task_count: 14
+    acceptance_count: 26
+    acceptance_completed: 26
+confidence:
+    certain: 7
+    confident: 3
+    tentative: 0
+    unresolved: 0
+    score: 4.8
+    fuzzy: true
+    dimensions:
+        signal: 74.0
+        reversibility: 84.0
+        competence: 85.5
+        disambiguation: 84.5
+stage_metrics:
+    intake: {started_at: "2026-08-17T14:54:11Z", driver: fab-new, iterations: 1, completed_at: "2026-08-17T14:57:43Z"}
+    apply: {started_at: "2026-08-17T14:57:43Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T15:08:35Z"}
+    review: {started_at: "2026-08-17T15:08:35Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T15:11:18Z"}
+    hydrate: {started_at: "2026-08-17T15:11:18Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T15:17:18Z"}
+    ship: {started_at: "2026-08-17T15:17:18Z", driver: fab-fff, iterations: 1, completed_at: "2026-08-17T15:21:42Z"}
+    review-pr: {started_at: "2026-08-17T15:21:42Z", driver: git-pr, iterations: 1, completed_at: "2026-08-17T15:23:22Z"}
+prs:
+    - https://github.com/sahil87/run-kit/pull/646
+true_impact:
+    added: 2348
+    deleted: 303
+    net: 2045
+    excluding:
+        added: 1322
+        deleted: 269
+        net: 1053
+    tests:
+        added: 282
+        deleted: 25
+        net: 257
+    computed_at: "2026-08-17T15:21:42Z"
+    computed_at_stage: ship
+summary: hover card body is fab+pr only (parts resolvers, continuation lines); out/agt/dot-label lines dropped
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-08-17T15:23:22Z

@@ -24,12 +24,13 @@ import { mockStateSocket } from "./_state-socket-mock";
 const SERVER = "default";
 
 // @1: change-bound window WITH an owned open PR (blue "building — active" dot
-// — the PR never owns the dot; the rest PR glyph + full four-register card
+// — the PR never owns the dot; the rest PR glyph + the card's fab/pr registers
 // carry the PR story) AND a reconciled claude chat (so the conversation-fork
 // affordance renders — 260806-s4av), carrying two panes (%425 active) so the
 // identity title bar renders its full `Window @N · pane %N · N panes` form.
-// @2: plain scratch window (gray "idle" dot, no glyph, out-register-only card,
-// no fork link, no panes → degraded `Window @N` title) carrying an orange
+// @2: plain scratch window (gray "idle" dot, no glyph, a body-less card — the
+// title bar + action rows only, no fork link, no panes → degraded `Window @N`
+// title) carrying an orange
 // color + solid marker so the coarse left-zone reclaim can prove the
 // display-only stripe survives the interactive zone's removal.
 const sessionsPayload = JSON.stringify([
@@ -152,9 +153,10 @@ test.describe("Row flyout card (fine pointer)", () => {
     // Content: the identity title bar (`Window @N · pane %N · N panes`, the
     // card's first element, carrying ONLY the ⓘ docs affordance on its right
     // edge — actions live in the sectioned rows at the card's bottom), then
-    // the DEMOTED dot-label body line (hue word + status word +
-    // waiting suffix — no PR words; the pr register below carries the PR) +
-    // the four registers + freshness + links.
+    // the body — the `fab` and `pr` registers ONLY (the row already carries
+    // the name/dot/glyph/label, so no status-label line, no `out`, no `agt`):
+    // critical tokens lead, long values continue on indented lines, freshness
+    // lives inside the pr group.
     const titleBar = page.getByTestId("popup-title-bar");
     await expect(titleBar).toContainText("Window @1 · pane %425 · 2 panes");
     await expect(titleBar.getByTestId("row-flyout-docs-link")).toBeVisible();
@@ -181,15 +183,18 @@ test.describe("Row flyout card (fine pointer)", () => {
     expect(forkBox.y).toBeLessThan(pinBox.y);
     expect(pinBox.y).toBeLessThan(killBox.y);
     const cardText = (await card(page).innerText()).replaceAll("\n", " ");
-    expect(cardText.indexOf("Window @1")).toBeLessThan(cardText.indexOf("building — active"));
-    await expect(card(page)).toContainText("building — active — agent waiting 3m");
-    await expect(page.getByTestId("row-flyout-out")).toContainText("out");
-    await expect(page.getByTestId("row-flyout-agt")).toContainText("waiting 3m");
-    await expect(page.getByTestId("row-flyout-fab")).toContainText(
-      "93dy window-row-pr-glyph-register-flyout · apply · active",
+    expect(cardText.indexOf("Window @1")).toBeLessThan(cardText.indexOf("93dy"));
+    // No line restates the row: no status-label text, no out/agt registers.
+    await expect(card(page)).not.toContainText("building — active");
+    await expect(page.getByTestId("row-flyout-out")).toHaveCount(0);
+    await expect(page.getByTestId("row-flyout-agt")).toHaveCount(0);
+    // fab: the decisive tokens lead; the slug continues on an indented line.
+    await expect(page.getByTestId("row-flyout-fab")).toContainText("93dy · apply · active");
+    await expect(page.getByTestId("row-flyout-fab-slug")).toContainText(
+      "window-row-pr-glyph-register-flyout",
     );
+    // pr: identity inside the anchor; health + freshness as continuation lines.
     await expect(page.getByTestId("row-flyout-pr")).toContainText("#386");
-    await expect(page.getByTestId("row-flyout-checked")).toContainText(/checked \d+\w+ ago/);
     // The pr register LINE itself is the open-first anchor (PrLinkRow idiom):
     // it wraps the segments and carries an always-visible inline ↗.
     const prLink = page.getByTestId("row-flyout-pr-link");
@@ -224,28 +229,27 @@ test.describe("Row flyout card (fine pointer)", () => {
     expect(cardBox.y).toBeLessThan(rowBox.y + rowBox.height + 8);
     expect(cardBox.y + cardBox.height).toBeGreaterThan(rowBox.y - 8);
 
-    // No line paints OUTSIDE the max-w-xs card box: the mocked fab register
-    // ("…window-row-pr-glyph-register-flyout · apply · active") is wider than
-    // the card, so without `truncate` on the register lines the card's
-    // scrollWidth exceeds its clientWidth (the cycle-1 regression measured
-    // 435 vs 318). Truncated lines keep content inside the box.
+    // No line paints OUTSIDE the max-w-xs card box: the register and
+    // continuation lines' `truncate` keeps content inside the box (the cycle-1
+    // regression measured 435 vs 318 without it).
     const overflow = await card(page).evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
   test("moving between rows retargets the card (warm window, single card)", async ({ page }) => {
     await prRow(page).hover();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("#386");
 
     // Sweep to the sibling row: the first card closes and the sibling's opens
     // (warm retarget — no strobing, never two cards). The pane-less scratch
-    // window's title degrades to `Window @N` alone.
+    // window's title degrades to `Window @N` alone, and with no change and no
+    // PR the card renders NO body — title bar and action rows only.
     await scratchRow(page).hover();
     await expect(card(page)).toHaveCount(1);
-    await expect(card(page)).toContainText("idle");
     const titleBar = page.getByTestId("popup-title-bar");
     await expect(titleBar).toContainText("Window @2");
     await expect(titleBar).not.toContainText("pane");
+    await expect(page.getByTestId("row-flyout-fab")).toHaveCount(0);
     await expect(page.getByTestId("row-flyout-pr-link")).toHaveCount(0);
   });
 
@@ -261,7 +265,7 @@ test.describe("Row flyout card (fine pointer)", () => {
     await expect(forkRow).toHaveAttribute("title", /same directory/i);
 
     await scratchRow(page).hover();
-    await expect(card(page)).toContainText("idle");
+    await expect(card(page)).toContainText("Window @2");
     await expect(page.getByTestId("row-flyout-fork-action")).toHaveCount(0);
 
     // Clicking it POSTs the window-keyed fork endpoint with NO body (every input
@@ -326,7 +330,7 @@ test.describe("Row flyout card (fine pointer)", () => {
   }) => {
     await prRow(page).focus();
     await expect(card(page)).toBeVisible();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("#386");
 
     // The card's links are Tab-reachable from the focused row
     // (FloatingFocusManager modal={false} + the portal's tab-order guards).
@@ -431,7 +435,7 @@ test.describe("Row flyout card (coarse pointer)", () => {
     // (@1's select would navigate to /default/1).
     await prRail.tap();
     await expect(card(page)).toBeVisible();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("#386");
     // The card is the coarse color/pin/kill home — and fork's only home.
     // `Change color…` leads the action rows on every tier (260817-ve5m).
     const colorRow = card(page).getByTestId("row-flyout-color-action");
@@ -534,7 +538,7 @@ test.describe("Row flyout card (coarse pointer)", () => {
     await page.mouse.move(railBox.x + railBox.width / 2, railBox.y + railBox.height / 2);
     await page.mouse.down();
     await expect(card(page)).toBeVisible();
-    await expect(card(page)).toContainText("building — active");
+    await expect(card(page)).toContainText("Window @1");
 
     const scratchBox = (await scratchRow(page).boundingBox())!;
     await page.mouse.move(scratchBox.x + scratchBox.width / 2, scratchBox.y + scratchBox.height / 2, {

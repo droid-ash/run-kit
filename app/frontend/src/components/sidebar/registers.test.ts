@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getOutputLine, getAgentLine, getFabLine, getPrSegments } from "./registers";
+import { getOutputLine, getAgentLine, getFabParts, getFabLine, getPrSegments } from "./registers";
 import { makeWindow, makeWindowWithPanes } from "@/test-utils/fixtures";
 
 // 93dy: the register-line resolvers were extracted from status-panel.tsx into
@@ -113,5 +113,71 @@ describe("getPrSegments (L3)", () => {
     );
     expect(segs?.[2]).toEqual({ text: "checks fail", color: "text-signal-red" });
     expect(segs?.[3]).toEqual({ text: "review: changes requested", color: "text-signal-red" });
+  });
+});
+
+// The parts resolvers feed the row-hover flyout card, which composes the fab
+// and pr registers across multiple lines; the joined formatters above are
+// pinned byte-identical for the PANE panel (status-panel.tsx) and status bar.
+describe("getFabParts", () => {
+  it("null under the same gate as getFabLine (no parseable change or no stage)", () => {
+    expect(getFabParts(makeWindow({}))).toBeNull();
+    expect(getFabParts(makeWindow({ fabChange: "260805-93dy-row-flyout" }))).toBeNull();
+  });
+
+  it("resolves id, slug, stage separately; displayState only when present", () => {
+    expect(
+      getFabParts(
+        makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "review", fabDisplayState: "failed" }),
+      ),
+    ).toEqual({ id: "93dy", slug: "row-flyout", stage: "review", displayState: "failed" });
+    expect(getFabParts(makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "apply" }))).toEqual({
+      id: "93dy",
+      slug: "row-flyout",
+      stage: "apply",
+    });
+  });
+});
+
+describe("getPrSegments", () => {
+  it("null without a prNumber — even with a bare prUrl", () => {
+    expect(getPrSegments(makeWindow({}))).toBeNull();
+    expect(getPrSegments(makeWindow({ prUrl: "https://github.com/o/r/pull/9" }))).toBeNull();
+  });
+
+  it("one flat list: number, state, then checks and review", () => {
+    expect(
+      getPrSegments(makeWindow({ prNumber: 241, prState: "open", prChecks: "pass", prReview: "approved" })),
+    ).toEqual([
+      { text: "#241", color: "text-text-primary" },
+      { text: "open", color: "text-accent-green" },
+      { text: "checks pass", color: "text-accent-green" },
+      { text: "review: approved", color: "text-accent-green" },
+    ]);
+  });
+
+  it("a merged PR drops checks and review — they are history once it lands", () => {
+    expect(
+      getPrSegments(
+        makeWindow({ prNumber: 241, prState: "merged", prChecks: "fail", prReview: "changes_requested" }),
+      ),
+    ).toEqual([
+      { text: "#241", color: "text-text-primary" },
+      { text: "merged", color: "text-signal-purple" },
+    ]);
+  });
+
+  it("an open draft keeps every segment — the widest line the register produces", () => {
+    expect(
+      getPrSegments(
+        makeWindow({
+          prNumber: 540,
+          prState: "open",
+          prIsDraft: true,
+          prChecks: "pending",
+          prReview: "changes_requested",
+        }),
+      )!.map((s) => s.text),
+    ).toEqual(["#540", "open (draft)", "checks pending", "review: changes requested"]);
   });
 });

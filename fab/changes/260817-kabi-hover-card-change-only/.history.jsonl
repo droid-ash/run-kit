@@ -1,0 +1,12 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-08-17T14:54:11Z"}
+{"args":"Reduce the window hover card to the change and its PR only. Drop the out and agt registers and the dotLabel status line from the card (the sidebar row's status dot already carries idle/active/waiting, so they are repetition), render no body at all when a window has neither a fab change nor a PR, use no group headings, put the fab slug and the PR health segments on indented continuation lines instead of truncating (the card is ~42 chars wide; the fab line needs 43 and the widest PR line 68), gate the freshness line on the PR register so a prFetchedAt with no prNumber renders nothing, and render nothing for a bare prUrl with no number. The bottom PANE panel keeps the full four-register view unchanged.","cmd":"fab-new","event":"command","ts":"2026-08-17T14:54:11Z"}
+{"delta":"+4.8","event":"confidence","score":4.8,"trigger":"calc-score","ts":"2026-08-17T14:55:42Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-08-17T14:57:43Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-08-17T14:57:43Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-08-17T15:08:35Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-08-17T15:11:18Z"}
+{"event":"review","result":"passed","ts":"2026-08-17T15:11:18Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-08-17T15:17:18Z"}
+{"cmd":"git-pr","event":"command","ts":"2026-08-17T15:18:19Z"}
+{"action":"enter","driver":"git-pr","event":"stage-transition","stage":"review-pr","ts":"2026-08-17T15:21:42Z"}
+{"event":"review","result":"passed","ts":"2026-08-17T15:23:22Z"}

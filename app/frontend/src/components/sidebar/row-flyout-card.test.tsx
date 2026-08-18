@@ -6,8 +6,6 @@ import {
   flyoutOpenDelay,
   resetFlyoutWarmState,
   scrubTargetAt,
-  prFetchedAtEpoch,
-  FreshnessLine,
   FLYOUT_OPEN_DELAY_MS,
   STATUS_DOT_DOCS_URL,
   STATUS_RAIL_WIDTH_PX,
@@ -135,7 +133,7 @@ function renderOpen(win: WindowInfo) {
 }
 
 describe("RowFlyout card content", () => {
-  it("renders the identity title bar first, the docs link inside it, and the dot label as the first body line", () => {
+  it("renders the identity title bar first with the docs link, and no status-label body line", () => {
     const win = makeWindow({ activity: "idle" });
     renderOpen(win);
 
@@ -149,15 +147,11 @@ describe("RowFlyout card content", () => {
     expect(bar).toContainElement(docs);
     expect(docs).toHaveAttribute("href", STATUS_DOT_DOCS_URL);
     expect(docs).toHaveAttribute("target", "_blank");
-    // dotLabel demoted to the FIRST BODY LINE, still single-sourced with the
-    // dot's aria-label (the shared import). ("idle" also appears in the `out`
-    // register, so match the primary-text body span exactly.)
+    // No body line restates the dot's label — the row already carries it (the
+    // label itself stays the dot's aria-label, single-sourced via dotLabel).
     const labelText = dotLabel(win, statusDotState(win));
-    const label = Array.from(card.querySelectorAll("span")).find(
-      (s) => s.textContent === labelText && s.className.includes("text-text-primary"),
-    )!;
-    expect(label).toBeTruthy();
-    expect(bar.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const label = Array.from(card.querySelectorAll("span")).find((s) => s.textContent === labelText);
+    expect(label).toBeUndefined();
   });
 
   it("composes the full identity title — `Window @N · pane %N · N panes`", () => {
@@ -214,17 +208,31 @@ describe("RowFlyout card content", () => {
     expect(notchFill(undefined)).toBe("var(--color-bg-card)");
   });
 
-  it("absent layers render as absent: a plain shell pane shows ONLY the out register", () => {
+  it("renders no body block at all for a plain shell pane (no change, no PR)", () => {
     renderOpen(makeWindow({ activity: "idle" }));
-    expect(screen.getByTestId("row-flyout-out")).toBeInTheDocument();
+    // Title bar and nothing else — no wrapper, no registers, no freshness.
+    expect(screen.getByTestId("popup-title-bar")).toBeInTheDocument();
+    for (const id of [
+      "row-flyout-out",
+      "row-flyout-agt",
+      "row-flyout-fab",
+      "row-flyout-fab-slug",
+      "row-flyout-pr",
+      "row-flyout-pr-link",
+    ]) {
+      expect(screen.queryByTestId(id)).toBeNull();
+    }
+  });
+
+  it("an agent window with no change and no PR renders no body either", () => {
+    renderOpen(makeWindow({ agentState: "waiting", agentIdleDuration: "3m" }));
+    expect(screen.getByTestId("popup-title-bar")).toBeInTheDocument();
     expect(screen.queryByTestId("row-flyout-agt")).toBeNull();
     expect(screen.queryByTestId("row-flyout-fab")).toBeNull();
     expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
-    expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
-    expect(screen.queryByTestId("row-flyout-checked")).toBeNull();
   });
 
-  it("renders all four registers + freshness + PR link for a fully-loaded window", () => {
+  it("renders the fab register with its slug continuation and the pr register as one anchored line", () => {
     vi.setSystemTime(new Date("2026-08-05T10:00:30Z"));
     renderOpen(
       makeWindowWithPanes({
@@ -243,24 +251,31 @@ describe("RowFlyout card content", () => {
       }),
     );
 
-    expect(screen.getByTestId("row-flyout-out")).toHaveTextContent("active · zsh");
-    expect(screen.getByTestId("row-flyout-agt")).toHaveTextContent("agt waiting 3m");
-    expect(screen.getByTestId("row-flyout-fab")).toHaveTextContent("fab 93dy row-flyout · apply · active");
+    // The out/agt registers are gone — the row's status dot already carries
+    // that state.
+    expect(screen.queryByTestId("row-flyout-out")).toBeNull();
+    expect(screen.queryByTestId("row-flyout-agt")).toBeNull();
+    // fab: the decisive tokens lead (id · stage · state); the slug continues
+    // on an indented line where truncation costs nothing.
+    expect(screen.getByTestId("row-flyout-fab")).toHaveTextContent("fab 93dy · apply · active");
+    expect(screen.getByTestId("row-flyout-fab")).not.toHaveTextContent("row-flyout");
+    const slug = screen.getByTestId("row-flyout-fab-slug");
+    expect(slug).toHaveTextContent("row-flyout");
+    expect(slug.className).toContain("pl-[4ch]");
+    expect(slug.className).toContain("text-text-secondary");
+    // pr: the identity stays inside the anchor; the health facts continue as
+    // plain text OUTSIDE it (the anchor never spans two visual rows).
     const pr = screen.getByTestId("row-flyout-pr");
-    expect(pr).toHaveTextContent("#386");
-    // Register lines ellipsize INSIDE the max-w-xs card (panel parity —
-    // status-panel.tsx `min-w-0 truncate`); jsdom has no layout, so the
-    // classes are pinned here and the real no-overflow box is asserted in
+    expect(pr).toHaveTextContent("#386 · open · checks pass · review: approved");
+    // Register + continuation lines ellipsize INSIDE the max-w-xs card (panel
+    // parity — status-panel.tsx `min-w-0 truncate`); jsdom has no layout, so
+    // the classes are pinned here and the real no-overflow box is asserted in
     // e2e (row-flyout.spec.ts).
-    for (const id of ["row-flyout-out", "row-flyout-agt", "row-flyout-fab", "row-flyout-pr"]) {
+    for (const id of ["row-flyout-fab", "row-flyout-fab-slug", "row-flyout-pr"]) {
       expect(screen.getByTestId(id).className).toContain("truncate");
     }
-    expect(pr).toHaveTextContent("open");
-    expect(pr).toHaveTextContent("checks pass");
-    expect(pr).toHaveTextContent("review: approved");
-    expect(screen.getByTestId("row-flyout-checked")).toHaveTextContent("checked 30s ago");
-    // The pr register LINE is the open-first anchor (PrLinkRow idiom): the
-    // segments live inside it, with the always-visible inline ↗ after them.
+    // The pr LINE is the open-first anchor (PrLinkRow idiom): every segment
+    // lives inside it, with the always-visible inline ↗ after them.
     const link = screen.getByTestId("row-flyout-pr-link");
     expect(link).toContainElement(pr);
     expect(link).toHaveTextContent("↗");
@@ -269,7 +284,7 @@ describe("RowFlyout card content", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     // The anchor's prefix is EXACTLY "pr" + 2 NBSPs — the 4-advance column the
-    // `out `/`agt `/`fab ` prefixes (and status-panel.tsx's pr rows) use. Pin
+    // `fab ` prefix (and status-panel.tsx's pr rows) use. Pin
     // the codepoints so a mojibake re-encode (the cycle-1 `prÂ  ` regression,
     // U+00C2 U+00A0) can never silently return.
     const prPrefix = link.querySelector("span")!.textContent!;
@@ -280,37 +295,59 @@ describe("RowFlyout card content", () => {
     expect(screen.getByTestId("row-flyout-arrow")).toBeInTheDocument();
   });
 
-  it("colors the PR segments via the shared vocabulary (fail → red)", () => {
+  it("the widest PR state renders every segment on the one pr line", () => {
     renderOpen(
       makeWindow({
-        prNumber: 7,
+        prNumber: 540,
         prState: "open",
-        prChecks: "fail",
+        prIsDraft: true,
+        prChecks: "pending",
+        prReview: "changes_requested",
       }),
     );
     const pr = screen.getByTestId("row-flyout-pr");
-    const fail = Array.from(pr.querySelectorAll("span")).find(
-      (s) => s.textContent === "checks fail",
-    );
-    expect(fail).toBeTruthy();
-    expect(fail!.className).toContain("text-signal-red");
-    // No URL → the line stays plain read-only text, no anchor. Its RegisterLine
-    // prefix carries the same pinned "pr" + 2-NBSP codepoints.
-    expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
-    const plainPrefix = pr.querySelector("span")!.textContent!;
-    expect(Array.from(plainPrefix).map((c) => c.codePointAt(0))).toEqual([
-      0x70, 0x72, 0x00a0, 0x00a0,
-    ]);
+    expect(pr).toHaveTextContent("#540 · open (draft) · checks pending · review: changes requested");
+    // One line, so it truncates rather than wrapping — the box is asserted in e2e.
+    expect(pr.className).toContain("truncate");
   });
 
-  it("renders a bare 'open PR' anchor when prUrl exists without prNumber", () => {
-    renderOpen(makeWindow({ prUrl: "https://github.com/o/r/pull/9" }));
-    const link = screen.getByTestId("row-flyout-pr-link");
-    expect(link).toHaveTextContent("open PR");
-    expect(link).toHaveTextContent("↗");
-    expect(link).toHaveAttribute("aria-label", "Open PR in a new tab");
-    // No segment span without a prNumber (getPrSegments gate).
+  it("a change with no PR renders the fab register alone (no pr group, no freshness)", () => {
+    renderOpen(
+      makeWindow({ fabChange: "260805-93dy-row-flyout", fabStage: "review", fabDisplayState: "active" }),
+    );
+    expect(screen.getByTestId("row-flyout-fab")).toHaveTextContent("fab 93dy · review · active");
+    expect(screen.getByTestId("row-flyout-fab-slug")).toHaveTextContent("row-flyout");
     expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
+    expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
+  });
+
+  it("a fab change with no slug renders no empty continuation line", () => {
+    renderOpen(makeWindow({ fabChange: "260805-93dy-", fabStage: "apply" }));
+    expect(screen.getByTestId("row-flyout-fab")).toHaveTextContent("fab 93dy · apply");
+    expect(screen.queryByTestId("row-flyout-fab-slug")).toBeNull();
+  });
+
+  it("a prFetchedAt with no PR is inert — the card carries no freshness line at all", () => {
+    renderOpen(makeWindow({ prFetchedAt: "2026-08-05T10:00:00Z" }));
+    expect(screen.queryByTestId("row-flyout-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
+  });
+
+  it("the pr line keeps a color per segment", () => {
+    renderOpen(makeWindow({ prNumber: 7, prState: "open", prChecks: "fail" }));
+    const pr = screen.getByTestId("row-flyout-pr");
+    const spans = Array.from(pr.querySelectorAll("span"));
+    expect(spans.find((s) => s.textContent === "open")!.className).toContain("text-accent-green");
+    expect(spans.find((s) => s.textContent === "checks fail")!.className).toContain("text-signal-red");
+  });
+
+  it("a bare prUrl with no prNumber renders no pr line — and no body when there is no change either", () => {
+    renderOpen(makeWindow({ prUrl: "https://github.com/o/r/pull/9" }));
+    // The URL alone is not content: no anchor, no pr register, no body block.
+    expect(screen.queryByTestId("row-flyout-pr-link")).toBeNull();
+    expect(screen.queryByTestId("row-flyout-pr")).toBeNull();
+    expect(screen.queryByTestId("row-flyout-fab")).toBeNull();
+    expect(screen.getByTestId("popup-title-bar")).toBeInTheDocument();
   });
 
   it("does not mount the card at rest and does not open while suppressed", () => {
@@ -525,27 +562,6 @@ describe("Flyout warm-window delay group (module-scoped)", () => {
   });
 });
 
-describe("prFetchedAtEpoch + FreshnessLine (migrated from the dot tip)", () => {
-  it("parses prFetchedAt to epoch seconds", () => {
-    expect(prFetchedAtEpoch(makeWindow({ prFetchedAt: "2026-07-15T10:00:00Z" }))).toBe(
-      Math.floor(Date.parse("2026-07-15T10:00:00Z") / 1000),
-    );
-  });
-
-  it("null when absent or unparseable", () => {
-    expect(prFetchedAtEpoch(makeWindow({}))).toBeNull();
-    expect(prFetchedAtEpoch(makeWindow({ prFetchedAt: "garbage" }))).toBeNull();
-  });
-
-  it("FreshnessLine renders the relative time and omits itself on null", () => {
-    vi.setSystemTime(new Date("2026-07-15T10:00:30Z"));
-    render(<FreshnessLine fetchedAtEpoch={Math.floor(Date.parse("2026-07-15T10:00:00Z") / 1000)} />);
-    expect(screen.getByTestId("row-flyout-checked")).toHaveTextContent("checked 30s ago");
-    cleanup();
-    render(<FreshnessLine fetchedAtEpoch={null} />);
-    expect(screen.queryByTestId("row-flyout-checked")).toBeNull();
-  });
-});
 
 // Sectioned action rows (change color → fork → pin → kill): the card is the
 // color/pin/kill home on
@@ -610,10 +626,11 @@ describe("Pin/Kill action rows (ys3q)", () => {
     expect(color.compareDocumentPosition(fork) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(fork.compareDocumentPosition(pin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(pin.compareDocumentPosition(kill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // One section with a top border off the registers block; touch height on
-    // coarse, ~28px on fine pointers.
+    // One section with hairlines between its rows; touch height on coarse,
+    // ~28px on fine pointers. This fixture has no change and no PR, so the
+    // section is flush against the title bar and carries no top border of its
+    // own — the two tests above own that split.
     const section = fork.parentElement!;
-    expect(section.className).toContain("border-t");
     expect(section.className).toContain("divide-y");
     expect(section).toContainElement(color);
     expect(section).toContainElement(pin);
@@ -674,6 +691,33 @@ describe("flyout card elevation + action tray", () => {
     expect(tray.className).toContain("bg-bg-inset");
     expect(tray.className).toContain("rounded-b-[5px]");
     expect(tray.className).toContain("-mb-1.5");
+  });
+
+  // Without a body the title bar's mb-0.5 and the card's gap-1 would leave 6px
+  // of the card's lighter ground between two inset bands — a grey bar with
+  // nothing in it. `flush` pulls the tray up over that space, and drops its
+  // own border-t so the title bar's border-b is the single divider.
+  it("a body-less card butts the tray against the title bar with one divider", () => {
+    render(<Row win={makeWindow({})} onPinAction={() => {}} />);
+    hoverOpen();
+    const tray = screen.getByTestId("row-flyout-actions");
+    expect(tray.className).toContain("-mt-1.5");
+    expect(tray.className).not.toContain("border-t");
+    expect(tray.className).not.toContain("mt-1 ");
+  });
+
+  it("a card with a body keeps the tray's own top border and spacing", () => {
+    render(
+      <Row
+        win={makeWindow({ fabChange: "260817-kabi-hover-card-change-only", fabStage: "review" })}
+        onPinAction={() => {}}
+      />,
+    );
+    hoverOpen();
+    expect(screen.getByTestId("row-flyout-fab")).toBeInTheDocument();
+    const tray = screen.getByTestId("row-flyout-actions");
+    expect(tray.className).toContain("border-t");
+    expect(tray.className).not.toContain("-mt-1.5");
   });
 
   it("action rows read primary at rest and the rail color rides the danger seam", () => {

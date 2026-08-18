@@ -44,16 +44,28 @@ export function getAgentLine(win: WindowInfo): string | null {
   return win.agentState;
 }
 
+export type FabParts = { id: string; slug: string; stage: string; displayState?: string };
+
+/** Resolve the L2 `fab` register into its parts so a surface can compose them
+ *  across lines (the row-hover flyout card leads with the decisive tokens and
+ *  moves the slug to a continuation line). Null when the window has no
+ *  parseable fab change or no stage. */
+export function getFabParts(win: WindowInfo): FabParts | null {
+  const fabChange = parseFabChange(win.fabChange ?? "");
+  if (!fabChange || !win.fabStage) return null;
+  const parts: FabParts = { id: fabChange.id, slug: fabChange.slug, stage: win.fabStage };
+  if (win.fabDisplayState) parts.displayState = win.fabDisplayState;
+  return parts;
+}
+
 /** Build the L2 `fab` register string: `<id> <slug> · <stage>[ ·
  *  <displayState>]`. The displayState segment is appended when present
  *  (`fab pane map` may omit it on older binaries). Null when the window has no
  *  parseable fab change or no stage. */
 export function getFabLine(win: WindowInfo): string | null {
-  const fabChange = parseFabChange(win.fabChange ?? "");
-  if (!fabChange || !win.fabStage) return null;
-  return `${fabChange.id} ${fabChange.slug} · ${win.fabStage}${
-    win.fabDisplayState ? ` · ${win.fabDisplayState}` : ""
-  }`;
+  const parts = getFabParts(win);
+  if (!parts) return null;
+  return `${parts.id} ${parts.slug} · ${parts.stage}${parts.displayState ? ` · ${parts.displayState}` : ""}`;
 }
 
 export type PrSegment = { text: string; color: string };
@@ -96,3 +108,4 @@ export function getPrSegments(win: WindowInfo): PrSegment[] | null {
   }
   return segments;
 }
+

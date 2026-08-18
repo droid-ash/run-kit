@@ -2,11 +2,13 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -243,6 +245,10 @@ func TestStartWithBinary_InvalidPath(t *testing.T) {
 	t.Setenv("RK_HOST", "127.0.0.1")
 	t.Setenv("RK_PORT", fmt.Sprintf("%d", port))
 
+	// Satisfy the tmux-presence precheck hermetically — this test asserts
+	// the symlink-resolution path and must pass on tmux-less hosts too.
+	stubTmuxLookPath(t, "tmux")
+
 	// StartWithBinary should return an error for a nonexistent path.
 	err := StartWithBinary("/nonexistent/path/rk")
 	if err == nil {
@@ -251,6 +257,64 @@ func TestStartWithBinary_InvalidPath(t *testing.T) {
 	wantMsg := "resolving executable symlinks"
 	if !strings.Contains(err.Error(), wantMsg) {
 		t.Errorf("error = %q, want it to contain %q", err, wantMsg)
+	}
+}
+
+// stubTmuxLookPath swaps daemonTmuxLookPath for a stub resolving exactly the
+// given binaries, restoring the real exec.LookPath at cleanup.
+func stubTmuxLookPath(t *testing.T, found ...string) {
+	t.Helper()
+	set := make(map[string]bool, len(found))
+	for _, f := range found {
+		set[f] = true
+	}
+	orig := daemonTmuxLookPath
+	t.Cleanup(func() { daemonTmuxLookPath = orig })
+	daemonTmuxLookPath = func(name string) (string, error) {
+		if set[name] {
+			return "/usr/bin/" + name, nil
+		}
+		return "", errors.New("not found")
+	}
+}
+
+func TestStart_TmuxMissingFailsFastWithHint(t *testing.T) {
+	stubTmuxLookPath(t)
+
+	// The hint half of the message is GOOS-dependent (darwin answers with the
+	// brew hint before any manager probe), so derive the expectation from the
+	// same inputs the precheck uses instead of hard-coding one branch.
+	wantHint := tmux.InstallHint(runtime.GOOS, daemonTmuxLookPath)
+
+	for name, start := range map[string]func() error{
+		"Start":           Start,
+		"StartWithBinary": func() error { return StartWithBinary("/nonexistent/path/rk") },
+	} {
+		err := start()
+		if err == nil {
+			t.Fatalf("%s with tmux missing should return error", name)
+		}
+		for _, want := range []string{"tmux not found on PATH", wantHint, "rk doctor"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s error = %q, want it to contain %q", name, err, want)
+			}
+		}
+	}
+}
+
+func TestStart_TmuxMissingHintIsPackageManagerAware(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("package-manager probe is linux-only")
+	}
+	stubTmuxLookPath(t, "apt-get")
+
+	err := Start()
+	if err == nil {
+		t.Fatal("Start with tmux missing should return error")
+	}
+	want := "install with: sudo apt-get install tmux"
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err, want)
 	}
 }
 
@@ -263,6 +327,9 @@ func TestRestartWithBinary_InvalidPath(t *testing.T) {
 	port := freeTCPPort(t)
 	t.Setenv("RK_HOST", "127.0.0.1")
 	t.Setenv("RK_PORT", fmt.Sprintf("%d", port))
+
+	// Satisfy the tmux-presence precheck hermetically (see TestStartWithBinary_InvalidPath).
+	stubTmuxLookPath(t, "tmux")
 
 	err := RestartWithBinary("/nonexistent/path/rk")
 	if err == nil {

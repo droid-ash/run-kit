@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { evaluateMediaQuery, useMediaQuery } from "@/hooks/use-media-query";
 import { useKeybindings } from "@/hooks/use-keybindings";
@@ -16,8 +16,9 @@ import {
 } from "@/lib/operator-console";
 
 /** The wide-desktop rung (tailwind `lg`) — the standing omnibox replaces the
- *  ghost/morph pair at and above it. Evaluated at event time (focus/blur), so
- *  no live subscription is needed. */
+ *  ghost/morph pair at and above it. Read BOTH ways: subscribed for render (the
+ *  `engaged` chrome rule below) and evaluated at event time in the blur handler,
+ *  where a one-shot read cannot race a pending re-render. */
 const WIDE_RUNG_QUERY = "(min-width: 1024px)";
 
 /** The extra-wide rung (tailwind `2xl`) — the only width where the standing
@@ -43,12 +44,23 @@ const EXTRA_WIDE_RUNG_QUERY = "(min-width: 1536px)";
  * The box IS the console compose — draft, send, and image-paste upload ride
  * the shared seam in lib/operator-console.ts. Enter (non-empty) sends through
  * the `target:"agent"` lane and auto-opens the drawer with focus retained for
- * follow-ups; the ⌘J
- * three-state machine (rest → focused → open) owns focus: entering the
- * machine from rest focuses the box and selects any draft, returning to rest
- * blurs and restores the previously focused element. Escape is NOT handled
- * here — the console's document listener steps the machine back one level so
- * a single Esc can never double-step.
+ * follow-ups; the ⌘J three-state machine (rest → focused → open) owns focus:
+ * entering the machine from rest focuses the box and selects any draft,
+ * returning to rest blurs and restores the previously focused element — under
+ * two invariants, both load-bearing. An origin INSIDE the box is never
+ * recorded (a mouse entry focuses the input before the machine transitions, so
+ * an unguarded capture would name the box itself and the restore would re-focus
+ * it, whose onFocus re-enters the machine — a loop with no release), and the
+ * restore runs only while the box STILL owns focus (a release caused by the
+ * user focusing a terminal pane already has its owner; overriding it steals the
+ * keystrokes). Escape is NOT handled here — the console's document listener
+ * steps the machine back one level so a single Esc can never double-step.
+ *
+ * Two derived flags, deliberately not one: `morphed` (machine-derived, the same
+ * value the top bar calls `omniboxMorphed`) says the box is RENDERED in place
+ * of the heading; `engaged` says it LOOKS like it owns input. They diverge at
+ * `open`, where a blur does not release the machine — the drawer is a peek —
+ * so a machine-derived chrome would claim focus the box no longer has.
  *
  * The wrapper carries the console-root attribute so the route terminals'
  * document-level file-paste forward skips omnibox-origin pastes (the box owns
@@ -57,6 +69,7 @@ const EXTRA_WIDE_RUNG_QUERY = "(min-width: 1536px)";
  */
 export function OperatorOmnibox({ routeServer }: { routeServer: string | null }) {
   const isMobile = useIsMobile();
+  const wide = useMediaQuery(WIDE_RUNG_QUERY);
   const extraWide = useMediaQuery(EXTRA_WIDE_RUNG_QUERY);
   const machine = useConsoleMachineState();
   const compose = useOperatorCompose();
@@ -81,7 +94,9 @@ export function OperatorOmnibox({ routeServer }: { routeServer: string | null })
   );
   const { byAction, host } = useKeybindings();
   const inputRef = useRef<HTMLInputElement>(null);
-  const restoreFocusRef = useRef<Element | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxFocused, setBoxFocused] = useState(false);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const machineRef = useRef(machine);
   machineRef.current = machine;
   const textRef = useRef(compose.text);
@@ -93,31 +108,50 @@ export function OperatorOmnibox({ routeServer }: { routeServer: string | null })
     : undefined;
 
   // Focus ownership: entering the machine from rest moves focus into the box
-  // (draft selected); returning to rest blurs the box (when it holds focus)
-  // and restores the previously focused element. Intermediate steps
-  // (focused ⇄ open) leave focus untouched — the peek keeps the box focused.
+  // (draft selected); returning to rest blurs the box and restores the
+  // previously focused element. Intermediate steps (focused ⇄ open) leave
+  // focus untouched — the peek keeps the box focused.
   const prevMachineRef = useRef(machine);
   useEffect(() => {
     const prev = prevMachineRef.current;
     prevMachineRef.current = machine;
     if (machine !== "rest" && prev === "rest") {
-      restoreFocusRef.current = document.activeElement;
+      // Only an origin OUTSIDE the box is a restore target. A mouse entry
+      // focuses the input before this transition, so an unguarded capture
+      // records the box itself — and the release below would then re-focus it,
+      // whose onFocus re-enters the machine: a loop the user cannot escape,
+      // not even with Esc.
+      const origin = document.activeElement;
+      restoreFocusRef.current =
+        origin instanceof HTMLElement && !boxRef.current?.contains(origin) ? origin : null;
       const el = inputRef.current;
       if (el) {
         el.focus();
         el.select();
       }
     } else if (machine === "rest" && prev !== "rest") {
-      if (document.activeElement === inputRef.current) inputRef.current?.blur();
       const el = restoreFocusRef.current;
       restoreFocusRef.current = null;
-      if (el instanceof HTMLElement && el.isConnected) el.focus();
+      // The box hands focus back only when it still HAS it — the release came
+      // from Esc, the chord, or the ✕. A release caused by the user focusing
+      // something else (a terminal pane) already has its owner; acting here
+      // would steal the keystrokes it is about to receive.
+      if (document.activeElement !== inputRef.current) return;
+      inputRef.current?.blur();
+      if (el?.isConnected) el.focus();
     }
   }, [machine]);
 
   if (isMobile) return null;
 
-  const active = machine !== "rest";
+  // The box is RENDERED in place of the heading (the top bar keys its own
+  // heading hiding on the same value, as `omniboxMorphed`).
+  const morphed = machine !== "rest";
+  // The box LOOKS like it owns input. Below `lg` the morph-hold keeps it lit
+  // while unfocused: the box stands where the heading was and a live draft
+  // holds it there, so standing the chrome down would read as discarding a
+  // message the user typed but has not sent.
+  const engaged = morphed && (boxFocused || !wide);
 
   return (
     <>
@@ -127,7 +161,7 @@ export function OperatorOmnibox({ routeServer }: { routeServer: string | null })
           + hamburger against the anchored heading) has no room for it; the
           chord/palette still morph the box in place there. Hidden while the
           machine is engaged (the box is showing). */}
-      {!active && (
+      {!morphed && (
         <button
           type="button"
           data-testid="operator-omnibox-ghost"
@@ -139,14 +173,15 @@ export function OperatorOmnibox({ routeServer }: { routeServer: string | null })
         </button>
       )}
       <div
+        ref={boxRef}
         data-operator-console=""
         data-testid="operator-omnibox"
         className={`${
           // Engaged, the box widens to hold the draft plus the capped chip;
           // at rest it stays the slim standing width.
-          active ? "flex w-[34ch]" : "hidden lg:flex w-[12ch] 2xl:w-[20ch]"
+          engaged ? "flex w-[34ch]" : "hidden lg:flex w-[12ch] 2xl:w-[20ch]"
         } ml-2 max-w-[40vw] items-center gap-1.5 rounded border px-2 py-0.5 ${
-          active ? "border-accent-green" : "border-border"
+          engaged ? "border-accent-green" : "border-border"
         }`}
       >
         <span aria-hidden="true" className="shrink-0 text-xs text-text-secondary">
@@ -161,23 +196,27 @@ export function OperatorOmnibox({ routeServer }: { routeServer: string | null })
           aria-label="Ask the operator"
           onChange={(e) => setOperatorComposeText(e.target.value)}
           onFocus={() => {
+            setBoxFocused(true);
             // Clicking into the standing box engages the machine.
             if (machineRef.current === "rest") setConsoleMachineState("focused");
           }}
           onBlur={(e) => {
-            // Only the focused rung (drawer closed) ends on blur: the standing
-            // box always releases; the md–lg morph holds while a draft exists
-            // so a click away never silently discards the in-place box.
-            if (machineRef.current !== "focused") return;
             // Focus moving WITHIN the box (the context chip's ✕, the keycap)
-            // is not a release — releasing here would unmount the chip before
-            // its click lands, making dismissal impossible by mouse.
+            // is not a release — standing down here would unmount the chip
+            // before its click lands, making dismissal impossible by mouse.
             if (
               e.relatedTarget instanceof Node &&
-              e.currentTarget.parentElement?.contains(e.relatedTarget)
+              boxRef.current?.contains(e.relatedTarget)
             ) {
               return;
             }
+            setBoxFocused(false);
+            // Only the focused rung (drawer closed) ends on blur: the standing
+            // box always releases; the md–lg morph holds while a draft exists
+            // so a click away never silently discards the in-place box. At
+            // `open` the machine is untouched — the drawer is a peek that
+            // outlives the box's focus.
+            if (machineRef.current !== "focused") return;
             if (evaluateMediaQuery(WIDE_RUNG_QUERY) || textRef.current.trim() === "") {
               setConsoleMachineState("rest");
             }
@@ -201,7 +240,7 @@ export function OperatorOmnibox({ routeServer }: { routeServer: string | null })
         {/* The chat-lane context chip — shown only while the machine is
             engaged (composing), so the resting box stays slim; the user sees
             what a send will attach before pressing Enter. */}
-        {active && <OperatorContextChip server={server} compact />}
+        {engaged && <OperatorContextChip server={server} compact />}
         {chord && (
           <kbd
             aria-hidden="true"

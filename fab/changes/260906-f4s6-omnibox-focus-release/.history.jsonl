@@ -1,0 +1,11 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-09-06T07:52:19Z"}
+{"args":"Operator omnibox focus-ownership bug: clicking outside does not blur/defocus the box, and clicking into a terminal pane leaves the omnibox focused so keystrokes are captured by it instead of the pane","cmd":"fab-new","event":"command","ts":"2026-09-06T07:52:19Z"}
+{"delta":"+3.7","event":"confidence","score":3.7,"trigger":"calc-score","ts":"2026-09-06T07:56:24Z"}
+{"delta":"+0.0","event":"confidence","score":3.7,"trigger":"calc-score","ts":"2026-09-06T07:56:34Z"}
+{"cmd":"fab-ff","event":"command","ts":"2026-09-06T09:43:34Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"apply","ts":"2026-09-06T09:43:40Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"review","ts":"2026-09-06T10:13:20Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"hydrate","ts":"2026-09-06T10:19:16Z"}
+{"event":"review","result":"passed","ts":"2026-09-06T10:19:16Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"ship","ts":"2026-09-06T10:21:42Z"}
+{"cmd":"fab-fff","event":"command","ts":"2026-09-06T10:57:14Z"}

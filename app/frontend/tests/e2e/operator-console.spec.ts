@@ -323,6 +323,53 @@ test.describe("Operator console", () => {
   });
 
   /**
+   * Proves: the omnibox YIELDS focus to a terminal pane. Clicking into the
+   * xterm after engaging the box leaves focus on the terminal's helper
+   * textarea and typed keys land there, not in the compose draft — the box
+   * neither re-acquires focus nor keeps its engaged chrome. jsdom cannot
+   * prove this (its synthetic focus events never move `document.activeElement`),
+   * which is exactly how the self-restore regression reached users.
+   *
+   * Steps:
+   * 1. Mock the backend with an operator window; land on the @1 terminal
+   *    route and wait for the xterm frame.
+   * 2. Click the omnibox and type a partial draft; assert it holds focus and
+   *    the box renders engaged (accent border).
+   * 3. Click the xterm screen; assert `document.activeElement` is
+   *    `.xterm-helper-textarea` and the omnibox is not focused.
+   * 4. Type; assert the omnibox draft is unchanged (the keys went to the
+   *    pane, not the box).
+   * 5. Assert the box has stood down to its resting chrome (no accent border,
+   *    no context chip).
+   */
+  test("clicking into the terminal takes focus from the omnibox and keeps it", async ({ page }) => {
+    await mockBackend(page, true);
+    await gotoWindow(page);
+    await expect(page.locator(".xterm-screen")).toBeVisible({ timeout: 10_000 });
+
+    await omniboxInput(page).click();
+    await omniboxInput(page).fill("half-written");
+    await expect(omniboxInput(page)).toBeFocused();
+    await expect(page.getByTestId("operator-omnibox")).toHaveClass(/border-accent-green/);
+
+    await page.locator(".xterm-screen").click();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.activeElement?.classList.contains("xterm-helper-textarea"),
+        ),
+      )
+      .toBe(true);
+    await expect(omniboxInput(page)).not.toBeFocused();
+
+    await page.keyboard.type("ls -la");
+    await expect(omniboxInput(page)).toHaveValue("half-written");
+
+    await expect(page.getByTestId("operator-omnibox")).not.toHaveClass(/border-accent-green/);
+    await expect(page.getByTestId("operator-console-context")).toBeHidden();
+  });
+
+  /**
    * Proves: the md–lg rung renders today's full heading (prefix included)
    * plus the dim `· ◉ ask` ghost; clicking the ghost morphs the center into
    * the omnibox in place (heading hidden, box focused) and Escape restores

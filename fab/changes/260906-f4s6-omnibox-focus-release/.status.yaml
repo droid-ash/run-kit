@@ -1,0 +1,55 @@
+id: f4s6
+name: 260906-f4s6-omnibox-focus-release
+created: 2026-09-06T07:52:19Z
+created_by: droid-ash
+change_type: fix
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: active
+    review-pr: pending
+plan:
+    generated: true
+    task_count: 5
+    acceptance_count: 20
+    acceptance_completed: 20
+confidence:
+    certain: 2
+    confident: 3
+    tentative: 1
+    unresolved: 0
+    score: 3.7
+    fuzzy: true
+    dimensions:
+        signal: 57.5
+        reversibility: 80.0
+        competence: 71.7
+        disambiguation: 65.0
+stage_metrics:
+    intake: {started_at: "2026-09-06T07:52:19Z", driver: fab-new, iterations: 1, completed_at: "2026-09-06T09:43:40Z"}
+    apply: {started_at: "2026-09-06T09:43:40Z", driver: fab-ff, iterations: 1, completed_at: "2026-09-06T10:13:20Z"}
+    review: {started_at: "2026-09-06T10:13:20Z", driver: fab-ff, iterations: 1, completed_at: "2026-09-06T10:19:16Z"}
+    hydrate: {started_at: "2026-09-06T10:19:16Z", driver: fab-ff, iterations: 1, completed_at: "2026-09-06T10:21:42Z"}
+    ship: {started_at: "2026-09-06T10:21:42Z", driver: fab-ff, iterations: 1}
+prs: []
+change_type_source: explicit
+true_impact:
+    added: 0
+    deleted: 0
+    net: 0
+    excluding:
+        added: 0
+        deleted: 0
+        net: 0
+    tests:
+        added: 0
+        deleted: 0
+        net: 0
+    computed_at: "2026-09-06T10:21:42Z"
+    computed_at_stage: hydrate
+summary: Omnibox focus return gains two invariants (no in-box origin, ownership-gated restore) and the engaged chrome splits from the machine flag, so a terminal click keeps focus
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-09-06T10:21:42Z

@@ -248,6 +248,66 @@ describe("OperatorOmnibox", () => {
     expect(getConsoleMachineState()).toBe("rest");
   });
 
+  // The focus-ownership cases below move focus for REAL (`el.focus()`), unlike
+  // the machine-transition cases above: `fireEvent.focus`/`blur` dispatch React
+  // synthetic events without moving `document.activeElement`, so the origin
+  // capture only ever sees `document.body` under them and the self-restore loop
+  // these guard against cannot form.
+
+  it("a mouse-entered box RELEASES on an outside focus — it does not restore itself", () => {
+    stubWideDesktop();
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    renderPair();
+
+    // Real click-entry: focus lands on the input BEFORE onFocus engages the
+    // machine, which is what used to poison the restore origin with the box.
+    const input = screen.getByTestId("operator-omnibox-input") as HTMLInputElement;
+    act(() => input.focus());
+    expect(getConsoleMachineState()).toBe("focused");
+
+    act(() => outside.focus());
+    expect(getConsoleMachineState()).toBe("rest");
+    expect(outside).toHaveFocus();
+    expect(input).not.toHaveFocus();
+    outside.remove();
+  });
+
+  it("Esc releases a mouse-entered box instead of re-focusing it", () => {
+    stubWideDesktop();
+    renderPair();
+
+    const input = screen.getByTestId("operator-omnibox-input") as HTMLInputElement;
+    act(() => input.focus());
+    expect(getConsoleMachineState()).toBe("focused");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(getConsoleMachineState()).toBe("rest");
+    expect(input).not.toHaveFocus();
+  });
+
+  it("at open, an outside focus stands the box chrome down but leaves the drawer open", () => {
+    stubWideDesktop();
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    renderPair();
+
+    act(() => requestOperatorConsole({ action: "open" }));
+    expect(getConsoleMachineState()).toBe("open");
+    expect(screen.getByTestId("operator-omnibox").className).toContain("w-[34ch]");
+
+    act(() => outside.focus());
+    // The peek outlives the box's focus: the machine and the drawer are
+    // untouched, only the chrome stands down.
+    expect(getConsoleMachineState()).toBe("open");
+    expect(screen.getByTestId("operator-console")).toBeInTheDocument();
+    const box = screen.getByTestId("operator-omnibox");
+    expect(box.className).toContain("w-[12ch]");
+    expect(box.className).toContain("border-border");
+    expect(screen.queryByTestId("operator-console-context")).toBeNull();
+    outside.remove();
+  });
+
   it("an image paste uploads to the operator session and insert-stages the path", async () => {
     stubWideDesktop();
     renderPair();
@@ -288,6 +348,22 @@ describe("OperatorOmnibox (templated chat lane)", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it("the chip's ✕ still lands — a within-box focus move never stands the chrome down", () => {
+    renderPair();
+
+    const input = screen.getByTestId("operator-omnibox-input") as HTMLInputElement;
+    act(() => input.focus());
+    const dismiss = screen.getByRole("button", { name: "Detach window context" });
+
+    // The real dismissal sequence: focus leaves the input FOR the ✕, then the
+    // click lands. If that blur stood the chrome down, the chip would unmount
+    // in between and the click would never reach it.
+    act(() => dismiss.focus());
+    expect(screen.getByTestId("operator-console-context")).toBeInTheDocument();
+    fireEvent.click(dismiss);
+    expect(screen.queryByTestId("operator-console-context")).toBeNull();
   });
 
   it("on a terminal route the engaged box shows the chip and Enter rides the templated lane", async () => {

@@ -1050,6 +1050,17 @@ summary {
    bodies with gradient shading — NO 1px rect scanline stacks, that
    construction IS aquarium) and in motion quality (continuous eased tail,
    fin and blade motion instead of aquarium's 2-frame step-end toggles).
+   The fish carry real reef-species colouring (a species pattern is a fact
+   about the animal, not copyrighted character art): the orange is an
+   ocellaris clownfish — bright orange with three vertical white bands edged
+   in fine black (one behind the eye, one mid-body widening forward toward
+   the head, one at the caudal peduncle), black-edged fins and a black iris;
+   the blue is a regal blue tang — royal blue with the black "palette"
+   marking hooking from the eye back along the upper body and down toward
+   the tail, and a canary yellow caudal fin. The band/palette markings are
+   clipped to the body outline by a clipPath inside each body SVG (ids are
+   scoped per data URI, so both fish may reuse id names — they are kept
+   distinct anyway).
    Markup contract: the overlay holds (FlairOverlay renders them) TWO
    <span class="rk-reef-fish"> — .rk-reef-orange then .rk-reef-blue — each
    holding .rk-reef-tail, .rk-reef-fin and .rk-reef-body spans (DOM order IS
@@ -1287,12 +1298,12 @@ summary {
 .rk-flair-reef .rk-reef-orange .rk-reef-tail {
   /* body joint at viewBox (4.8, 10.5) of 18x22 */
   transform-origin: calc(var(--fw) * 4.8 / 18) calc(var(--fh) * 10.5 / 22);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cpath d='M4.8 10.5 C3.5 9.5 2.1 8.3 0.7 7.2 C1.3 8.9 1.8 9.9 2.4 10.5 C1.8 11.1 1.3 12.1 0.7 13.8 C2.1 12.7 3.5 11.5 4.8 10.5 Z' fill='%23e08a33'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cpath d='M4.8 10.5 C3.5 9.5 2.1 8.3 0.7 7.2 C1.3 8.9 1.8 9.9 2.4 10.5 C1.8 11.1 1.3 12.1 0.7 13.8 C2.1 12.7 3.5 11.5 4.8 10.5 Z' fill='%23f4701f' stroke='%232a1608' stroke-width='0.22'/%3E%3C/svg%3E");
 }
 .rk-flair-reef .rk-reef-blue .rk-reef-tail {
   /* body joint at viewBox (11.2, 10.5) of 16x22 */
   transform-origin: calc(var(--fw) * 11.2 / 16) calc(var(--fh) * 10.5 / 22);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cpath d='M11.2 10.5 C12.5 9.5 13.9 8.3 15.3 7.2 C14.7 8.9 14.2 9.9 13.6 10.5 C14.2 11.1 14.7 12.1 15.3 13.8 C13.9 12.7 12.5 11.5 11.2 10.5 Z' fill='%234a7ac0'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cpath d='M11.2 10.5 C12.5 9.5 13.9 8.3 15.3 7.2 C14.7 8.9 14.2 9.9 13.6 10.5 C14.2 11.1 14.7 12.1 15.3 13.8 C13.9 12.7 12.5 11.5 11.2 10.5 Z' fill='%23ffd23f' stroke='%2312121a' stroke-width='0.22'/%3E%3C/svg%3E");
   animation-duration: 0.2s;
   animation-delay: -0.13s;
 }
@@ -1303,20 +1314,20 @@ summary {
 .rk-flair-reef .rk-reef-orange .rk-reef-fin {
   /* fin root at viewBox (8.2, 12.6) of 18x22 */
   transform-origin: calc(var(--fw) * 8.2 / 18) calc(var(--fh) * 12.6 / 22);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cpath d='M8.2 12.4 C9.5 12.5 10.7 13.2 11.3 14.5 C10.0 14.4 8.8 13.7 8.2 12.9 Z' fill='%23d97f2c'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cpath d='M8.2 12.4 C9.5 12.5 10.7 13.2 11.3 14.5 C10.0 14.4 8.8 13.7 8.2 12.9 Z' fill='%23f4701f' stroke='%232a1608' stroke-width='0.2'/%3E%3C/svg%3E");
 }
 .rk-flair-reef .rk-reef-blue .rk-reef-fin {
   /* fin root at viewBox (7.8, 12.6) of 16x22 */
   transform-origin: calc(var(--fw) * 7.8 / 16) calc(var(--fh) * 12.6 / 22);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cpath d='M7.8 12.4 C6.5 12.5 5.3 13.2 4.7 14.5 C6.0 14.4 7.2 13.7 7.8 12.9 Z' fill='%234472b4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cpath d='M7.8 12.4 C6.5 12.5 5.3 13.2 4.7 14.5 C6.0 14.4 7.2 13.7 7.8 12.9 Z' fill='%232f86dd' stroke='%2312121a' stroke-width='0.2'/%3E%3C/svg%3E");
   animation-duration: 0.2s;
   animation-delay: -0.05s;
 }
 .rk-flair-reef .rk-reef-orange .rk-reef-body {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cdefs%3E%3ClinearGradient id='ob' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ffc98a'/%3E%3Cstop offset='0.45' stop-color='%23f6a34c'/%3E%3Cstop offset='1' stop-color='%23c9752a'/%3E%3C/linearGradient%3E%3CradialGradient id='os' cx='0.42' cy='0.3' r='0.5'%3E%3Cstop offset='0' stop-color='%23fff' stop-opacity='0.55'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cpath d='M8.6 7.5 C9.4 6.3 10.6 5.6 11.8 5.6 C11.2 6.4 10.6 7.0 10.0 7.4 Z' fill='%23d97f2c'/%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='url(%23ob)'/%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='url(%23os)'/%3E%3Ccircle cx='13.1' cy='9.6' r='0.8' fill='%2320242e'/%3E%3Ccircle cx='13.35' cy='9.35' r='0.28' fill='%23fff' fill-opacity='0.9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cdefs%3E%3ClinearGradient id='ob' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ff9e4a'/%3E%3Cstop offset='0.45' stop-color='%23f4701f'/%3E%3Cstop offset='1' stop-color='%23c4500f'/%3E%3C/linearGradient%3E%3CradialGradient id='os' cx='0.42' cy='0.28' r='0.5'%3E%3Cstop offset='0' stop-color='%23fff' stop-opacity='0.4'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3CclipPath id='obody'%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z'/%3E%3C/clipPath%3E%3C/defs%3E%3Cpath d='M8.6 7.5 C9.4 6.3 10.6 5.6 11.8 5.6 C11.2 6.4 10.6 7.0 10.0 7.4 Z' fill='%23f4701f' stroke='%232a1608' stroke-width='0.2'/%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='url(%23ob)'/%3E%3Cg clip-path='url(%23obody)'%3E%3Cpath d='M12.9 6.6 L11.6 6.6 L11.0 14.4 L12.4 14.4 Z' fill='%23fdfdfb' stroke='%23241108' stroke-width='0.2'/%3E%3Cpath d='M9.9 6.6 L8.3 6.6 L7.5 14.4 L9.1 14.4 L10.6 10.5 Z' fill='%23fdfdfb' stroke='%23241108' stroke-width='0.2'/%3E%3Cpath d='M5.9 6.6 L4.9 6.6 L4.4 14.4 L5.4 14.4 Z' fill='%23fdfdfb' stroke='%23241108' stroke-width='0.2'/%3E%3C/g%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='url(%23os)'/%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='none' stroke='%232a1608' stroke-width='0.24'/%3E%3Ccircle cx='13.6' cy='9.7' r='0.85' fill='%231a0e06'/%3E%3Ccircle cx='13.85' cy='9.45' r='0.3' fill='%23fff' fill-opacity='0.92'/%3E%3C/svg%3E");
 }
 .rk-flair-reef .rk-reef-blue .rk-reef-body {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cdefs%3E%3ClinearGradient id='bb' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23a8cdf7'/%3E%3Cstop offset='0.45' stop-color='%235b8fd9'/%3E%3Cstop offset='1' stop-color='%2331589c'/%3E%3C/linearGradient%3E%3CradialGradient id='bs' cx='0.58' cy='0.3' r='0.5'%3E%3Cstop offset='0' stop-color='%23fff' stop-opacity='0.5'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cpath d='M7.4 7.5 C6.6 6.3 5.4 5.6 4.2 5.6 C4.8 6.4 5.4 7.0 6.0 7.4 Z' fill='%234472b4'/%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='url(%23bb)'/%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='url(%23bs)'/%3E%3Ccircle cx='2.9' cy='9.6' r='0.8' fill='%2320242e'/%3E%3Ccircle cx='2.65' cy='9.35' r='0.28' fill='%23fff' fill-opacity='0.9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cdefs%3E%3ClinearGradient id='bb' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%234aa3f0'/%3E%3Cstop offset='0.45' stop-color='%231f6fd0'/%3E%3Cstop offset='1' stop-color='%230f3f8c'/%3E%3C/linearGradient%3E%3CradialGradient id='bs' cx='0.58' cy='0.28' r='0.5'%3E%3Cstop offset='0' stop-color='%23fff' stop-opacity='0.4'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3CclipPath id='bbody'%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z'/%3E%3C/clipPath%3E%3C/defs%3E%3Cpath d='M7.4 7.5 C6.6 6.3 5.4 5.6 4.2 5.6 C4.8 6.4 5.4 7.0 6.0 7.4 Z' fill='%232f86dd' stroke='%2312121a' stroke-width='0.2'/%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='url(%23bb)'/%3E%3Cg clip-path='url(%23bbody)'%3E%3Cpath d='M3.0 10.4 C4.8 8.6 7.6 7.8 10.3 8.1 C11.3 9.2 11.5 10.9 11.0 12.7 L9.7 12.2 C10.1 10.8 9.9 9.8 9.3 9.4 C7.2 9.2 5.2 9.9 4.0 11.2 Z' fill='%23101a28' fill-opacity='0.95'/%3E%3C/g%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='url(%23bs)'/%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='none' stroke='%2312121a' stroke-width='0.24'/%3E%3Ccircle cx='2.5' cy='9.7' r='0.85' fill='%230a0a12'/%3E%3Ccircle cx='2.25' cy='9.45' r='0.3' fill='%23fff' fill-opacity='0.92'/%3E%3C/svg%3E");
 }
 
 /* warp (3D): a hyperspace starfield, ambient in any mount box. Markup

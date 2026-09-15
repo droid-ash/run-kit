@@ -105,6 +105,27 @@ Values to match, read from `.rk-flair-aquarium`:
 - **AND** reef differs only in being drawn with bezier art and moving its fins continuously
 - **AND** no manta, and no element aquarium does not have
 
+#### R19: The two fish carry real reef-species colouring
+The fish SHALL be coloured as the two species the user named — an **ocellaris clownfish** (the orange
+one) and a **regal blue tang** (the blue one) — drawn from the ANIMALS' documented colouring, not from
+any studio's character artwork. The flair channel's standing rule is original art with no copyrighted
+assets, and a species colour pattern is a fact about the animal.
+
+Clownfish (`Amphiprion ocellaris`): bright orange body; **three vertical white bands edged in fine
+black** — one just behind the eye, one mid-body that **widens forward toward the head**, one around the
+caudal peduncle; all fins edged in fine black; black iris.
+
+Blue tang (`Paracanthurus hepatus`): **royal blue** body; the black **"palette" marking** curving up
+from the eye, running back along the upper body and hooking down toward the tail; **canary yellow**
+caudal fin.
+
+- **GIVEN** either fish at rendered size
+- **WHEN** it swims past
+- **THEN** the clownfish shows three black-edged white bands with the middle one widening forward
+- **AND** the blue tang shows a royal blue body, the hooked black palette marking, and a yellow tail
+- **AND** both remain legible at the 22px row height — the markings are bold enough to read at 12x7px
+- **AND** the art is original: species colouring only, no character likeness
+
 #### R17: Fins and tails articulate continuously at aquarium's cadence
 Each fish's tail and pectoral fin SHALL be separate elements animated with `transform`, hinged where
 they meet the body, on an eased loop matching that fish's aquarium flip rate. No `step-end`.
@@ -313,6 +334,9 @@ Three stale comments SHALL be corrected: `swatch-popover.tsx` ~L41 ("14 named" �
 - [x] A-046 R18(c)/(d): **N/A** — manta-era (shared 20s rise/depth/bank period, bank-tracks-velocity); the fish traversals are a single linear 22s loop matching aquarium's, verified
 - [x] A-047 R17b/R18: the dwell half is RE-VERIFIED on the fish (own probe, 25ms-sampled full 22s loop, both scenes scrubbed to the same instants): the fully-off-screen share per loop is IDENTICAL to aquarium at both widths — orange **1.82% @220px / 0.91% @500px**, blue **1.93% / 1.02%** — and both teleport ends are fully off-screen (A-043). The wing-beat half is N/A (no manta)
 - [x] A-048 R18(b): **N/A** — manta-era (in-phase wings); no wings exist
+
+- [x] A-049 R19: VERIFIED this review (colour round) by rendering the actual part SVGs at 20x in headless Chromium: the orange fish (head RIGHT, eye at viewBox x=13.6) shows three white `#fdfdfb` bands with fine `#241108` edging, clipped to the body by `clipPath id='obody'` — one behind the eye (x≈11–12.9), one mid-body whose right edge bulges forward toward the head (pentagon reaching x=10.6 at mid-height), one at the caudal peduncle (x≈4.4–5.9); tail/fin/dorsal edged in `#2a1608`; black iris `#1a0e06`. The blue fish shows the royal-blue gradient (`#4aa3f0→#1f6fd0→#0f3f8c`), the black `#101a28` palette marking curving up from the eye, back along the upper body and hooking down toward the tail (clipped by `id='bbody'`), and a canary-yellow `#ffd23f` tail. Both are the species' documented colouring on the unchanged generic fish geometry — no character-likeness features
+- [x] A-050 R19: VERIFIED this review (colour round) with 1x-device-pixel screenshots of a real 22px row and an 18px-high cell plus dsf=2 close-ups: the orange's white bands and the blue's yellow tail + dark palette remain distinguishable at both sizes — markings do not turn to mud
 
 ### Scenario Coverage
 

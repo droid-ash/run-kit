@@ -3,7 +3,7 @@
  *  (`rk-flair-{value}`, absolute inset-0, clipped, pointer-events-none,
  *  aria-hidden) plus the per-flair CHILD markup the transform-driven
  *  treatments need: cube's nested wrappers + 6-face cube spans, warp's three
- *  starfield planes, reef's two fish (orange and blue, each split into tail,
+ *  starfield planes, nemo's two fish (orange and blue, each split into tail,
  *  fin and body spans so the tail and fin articulate on their own hinges)
  *  plus one seaweed clump of three blade spans — bubbles ride the overlay's
  *  ::before.
@@ -15,7 +15,7 @@
  *  flairs ignore it). Pass the row's guarded border color so tinted flairs
  *  match the row's family; omitted, the CSS falls back to --color-border.
  *
- *  DRAG GUARD: cube/warp/reef animate transforms on those child spans, which
+ *  DRAG GUARD: cube/warp/nemo animate transforms on those child spans, which
  *  would corrupt the HTML5 drag ghost (the row transform ban — see globals.css
  *  § Flair overlays). The uniform guard hides the overlay for EVERY flair
  *  while its row is the drag source (`hidden`), and the reduced-motion gate
@@ -57,22 +57,22 @@ export function FlairOverlay({
           <span className="rk-warp-plane" />
         </>
       )}
-      {flair === "reef" && (
+      {flair === "nemo" && (
         <>
-          <span className="rk-reef-fish rk-reef-orange">
-            <span className="rk-reef-tail" />
-            <span className="rk-reef-fin" />
-            <span className="rk-reef-body" />
+          <span className="rk-nemo-fish rk-nemo-orange">
+            <span className="rk-nemo-tail" />
+            <span className="rk-nemo-fin" />
+            <span className="rk-nemo-body" />
           </span>
-          <span className="rk-reef-fish rk-reef-blue">
-            <span className="rk-reef-tail" />
-            <span className="rk-reef-fin" />
-            <span className="rk-reef-body" />
+          <span className="rk-nemo-fish rk-nemo-blue">
+            <span className="rk-nemo-tail" />
+            <span className="rk-nemo-fin" />
+            <span className="rk-nemo-body" />
           </span>
-          <span className="rk-reef-weed">
-            <span className="rk-reef-blade" />
-            <span className="rk-reef-blade" />
-            <span className="rk-reef-blade" />
+          <span className="rk-nemo-weed">
+            <span className="rk-nemo-blade" />
+            <span className="rk-nemo-blade" />
+            <span className="rk-nemo-blade" />
           </span>
         </>
       )}

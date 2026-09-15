@@ -105,6 +105,23 @@ Values to match, read from `.rk-flair-aquarium`:
 - **AND** reef differs only in being drawn with bezier art and moving its fins continuously
 - **AND** no manta, and no element aquarium does not have
 
+#### R20: The flair token is `nemo`, not `reef`
+The flair SHALL be named **`nemo`**. `reef` described a scene that no longer exists (there is no coral
+or reef structure — two tropical fish over seaweed and bubbles), and the catalogue's dominant
+convention is a short character-flavoured token with original art behind it (`nyan`, `naruto`,
+`onepiece`, `pacman`, `spidey`, `ironman`). The rename covers the token, every CSS class
+(`rk-flair-reef` → `rk-flair-nemo`, `rk-reef-*` → `rk-nemo-*`), every keyframe name, and all prose —
+except the English phrase "reef-species", which refers to the animals and stays.
+
+Catalogue position is unchanged (immediately after `aquarium`), so the picker's column-flow parity and
+walk assertions are unaffected.
+
+- **GIVEN** the source tree after the rename
+- **WHEN** it is grepped for `reef`
+- **THEN** the only match is the English phrase "reef-species" in a comment
+- **AND** the token, classes, keyframes and help text all read `nemo`
+- **AND** the catalogue order and picker walk assertions are unchanged
+
 #### R19: The two fish carry real reef-species colouring
 The fish SHALL be coloured as the two species the user named — an **ocellaris clownfish** (the orange
 one) and a **regal blue tang** (the blue one) — drawn from the ANIMALS' documented colouring, not from
@@ -321,7 +338,7 @@ Three stale comments SHALL be corrected: `swatch-popover.tsx` ~L41 ("14 named" �
 - [x] A-036 R16/R18(c): **N/A** — manta-era (curved flight path with an 8.4px rise); the manta and its rise/depth/bank wrappers are scrapped. The fish equivalent — traversal position across the loop — is verified under A-039/A-047
 - [x] A-037 R16/R18(b): the calc-derived-hinge principle survives the manta and is RE-VERIFIED on the fish this review: the tail/fin `transform-origin`s are `calc(var(--fw) * …) calc(var(--fh) * …)` projections of the viewBox joint coordinates (globals.css:1289, 1294, 1305, 1310 — never literal px); computed values **4.8px 10.5px / 11.2px 10.5px / 8.2px 12.6px / 7.8px 12.6px** are the exact projections of viewBox joints (4.8,10.5)/(11.2,10.5)/(8.2,12.6)/(7.8,12.6); measured hinge drift ≤ 0.01px over full scrubbed cycles — a future box resize cannot desync the hinges
 - [x] A-038 R16/R18: **N/A** — manta-era (manta recognisability vs the reference sketch). On the current scene: this review's 6× side-by-side renders show reef's fish reading clearly as HD versions of aquarium's fish — same positions, same box sizes, gradient bodies, eyes, forked tails
-- [x] A-039 R16/R17b: the container-relative traversal half is RE-VERIFIED on the fish: `container-type: size` on the overlay (globals.css:1127-1131) with `100cqw` traversals (:1214-1223); measured positions are pixel-identical to aquarium across the full 22s loop at 220px and 500px (max real delta ≤ 0.3px — the one apparent 45.9/171.9px spike was a probe-parser artifact on a bare-`%` computed value at t=9900, not a real divergence). The banking clause is moot (no manta)
+- [x] A-039 R16/R17b: the container-relative traversal half is RE-VERIFIED on the fish: `container-type: size` on the overlay (globals.css:1127-1131) with `100cqw` traversals (:1214-1223); measured positions are pixel-identical to aquarium across the full 22s loop at 220px and 500px (max real delta ≤ 0.3px — the one apparent 45.9/171.9px spike was a probe-parser artifact on a bare-`%` computed value at t=9900, not a real divergence). The banking clause is moot (no manta). RE-VERIFIED post-rename this review: WAAPI-scrubbed (`getAnimations({subtree:true})`, paused + fixed currentTime) side-by-side probe at 220px — nemo fish `getBoundingClientRect` left edges vs aquarium's computed `background-position` sheet offsets (percentages resolved against container−image): identical at 9 loop instants across the full 22s (max delta 0.02px rounding); bubble tile computed `background-image` byte-identical (36×44, 5s linear); strip geometry/opacity parity (22px / margin-top −11px / 0.92); weed anchor 6px in both; computed timing functions: `linear` only on the two swims and the bubble tile, `ease-in-out` on both tails, both fins and all three blades
 
 - [x] A-040 R7: the removal requirement now reads against the MANTA (the fish it once demanded removed are the required cast again). RE-VERIFIED this review: repo-wide grep of `app/frontend/src` + `app/backend` for `manta` / `manta-side` / `manta-back` / `wing-far` / `wing-near` / `glide` / `rise` / `depth` / `bank` / `flap-upper` / `flap-lower` finds ZERO source hits outside the one intentional absence-assertion in flair-overlay.test.tsx:60-66 (other matches are git-ignored regenerated build output under `app/backend/build/`); the reef block's keyframes are exactly sway / sway-alt / bubbles / swim-orange / swim-blue / tail / fin; the reduced-motion list carries only current selectors
 - [x] A-041 R16: **N/A** — manta-era (silhouette vs the user-supplied reference sketch); the manta and the reference are gone
@@ -338,6 +355,9 @@ Three stale comments SHALL be corrected: `swatch-popover.tsx` ~L41 ("14 named" �
 - [x] A-049 R19: VERIFIED this review (colour round) by rendering the actual part SVGs at 20x in headless Chromium: the orange fish (head RIGHT, eye at viewBox x=13.6) shows three white `#fdfdfb` bands with fine `#241108` edging, clipped to the body by `clipPath id='obody'` — one behind the eye (x≈11–12.9), one mid-body whose right edge bulges forward toward the head (pentagon reaching x=10.6 at mid-height), one at the caudal peduncle (x≈4.4–5.9); tail/fin/dorsal edged in `#2a1608`; black iris `#1a0e06`. The blue fish shows the royal-blue gradient (`#4aa3f0→#1f6fd0→#0f3f8c`), the black `#101a28` palette marking curving up from the eye, back along the upper body and hooking down toward the tail (clipped by `id='bbody'`), and a canary-yellow `#ffd23f` tail. Both are the species' documented colouring on the unchanged generic fish geometry — no character-likeness features
 - [x] A-050 R19: VERIFIED this review (colour round) with 1x-device-pixel screenshots of a real 22px row and an 18px-high cell plus dsf=2 close-ups: the orange's white bands and the blue's yellow tail + dark palette remain distinguishable at both sizes — markings do not turn to mud
 
+- [x] A-051 R20: VERIFIED this review (re-review after the `"REEF"` → `"NEMO"` fix). `validate_test.go:550`'s `invalid` slice now carries nemo's full case-sensitivity pair `"Nemo", "NEMO"` — parity with every other token restored. A case-INSENSITIVE grep of `app/frontend/src` + `app/backend` (excluding the git-ignored regenerated `build/`) for `reef` matches ONLY the deliberate "reef-species" phrase (globals.css:1053). Every registration site re-verified site by site: `FLAIR_STATES` + themes.test.ts exact array, both types.ts doc comments, `flairTokens` + `ValidateFlairValue` doc comment + validate_test.go valid slice, `tab_flair.go` help, `operator.go` + operator_test.go, globals.css catalogue comment (:628), transform-ban note (:650), the whole `.rk-flair-nemo` block and the reduced-motion list, swatch-popover.test.tsx, flair-overlay.tsx (+ test). Every touched file is a PROVEN pure rename: `git show HEAD:<f> | sed 's/reef/nemo/g;s/Reef/Nemo/g;s/REEF/NEMO/g'` diffs clean against the working tree for all 11 source files, with the single "reef-species" exception — so no over-replacement and no functional edit could hide in the diff
+- [x] A-052 R20: VERIFIED this review (rename round) — `nemo` sits immediately after `aquarium` in every ordered enumeration (`FLAIR_STATES`, `flairTokens`, both `types.ts` doc comments, `tab_flair.go` help, `operator.go`, globals.css catalogue comment). The picker walk assertions are UNMODIFIED apart from the token-in-place rename: swatch-popover.test.tsx row-1 walk array changed only `"reef"` → `"nemo"` at the same 4th position (`rain, nyan, onepiece, matrix, nemo, invaders, warp, ironman` clamped at 8); row 2 untouched; 8-and-8 columns and 50 options untouched; sidebar/index.test.tsx's `ironman` cell assertion untouched. All walk tests pass (`just test-frontend`: 226 files / 4804 tests green)
+
 ### Scenario Coverage
 
 - [x] A-011 R4: a unit test in `flair-overlay.test.tsx` exercises reef's child-markup contract and the `hidden` → `null` guard — RE-VERIFIED this review (fish round) against the CURRENT contract: flair-overlay.test.tsx:37-67 asserts the overlay's only children are `.rk-reef-fish.rk-reef-orange`, `.rk-reef-fish.rk-reef-blue` (each with tail/fin/body in paint order) and one `.rk-reef-weed` of 3 blades, plus zero `rk-reef-manta*`/layer/shafts/floor elements with an explicit "The manta and the enriched scene were both rejected" comment at :60-61; the hidden→null loop at :76-81 includes `"reef"`
@@ -346,7 +366,7 @@ Three stale comments SHALL be corrected: `swatch-popover.tsx` ~L41 ("14 named" �
 
 ### Edge Cases & Error Handling
 
-- [x] A-014 R10: under `prefers-reduced-motion: reduce` every reef pseudo and child span is hidden (`animation: none; display: none`) — RE-VERIFIED this review (fish round): the gate list (globals.css:1973-1981) covers `::before`, `.rk-reef-fish`, `.rk-reef-orange`, `.rk-reef-blue`, `.rk-reef-tail`, `.rk-reef-fin`, `.rk-reef-body`, `.rk-reef-weed`, `.rk-reef-blade` — every current element, no dangling manta selectors; the reef block (ends :1320) precedes the gate (:1956+) in source order, so the equal-specificity overrides win; the prose reads "all sixteen named states" (:1956)
+- [x] A-014 R10: under `prefers-reduced-motion: reduce` every reef pseudo and child span is hidden (`animation: none; display: none`) — RE-VERIFIED this review (fish round): the gate list (globals.css:1973-1981) covers `::before`, `.rk-reef-fish`, `.rk-reef-orange`, `.rk-reef-blue`, `.rk-reef-tail`, `.rk-reef-fin`, `.rk-reef-body`, `.rk-reef-weed`, `.rk-reef-blade` — every current element, no dangling manta selectors; the reef block (ends :1320) precedes the gate (:1956+) in source order, so the equal-specificity overrides win; the prose reads "all sixteen named states" (:1956). RE-VERIFIED post-rename this review in headless Chromium with `reducedMotion: "reduce"` emulated: every nemo pseudo and child span computes `display: none` (13/13 targets, including the middle blade, whose surviving `animation-name` longhand is inert — a display:none subtree never animates — and is a pre-existing pattern, not rename fallout); zero `rk-reef-*` selectors remain anywhere (case-insensitive grep)
 - [x] A-015 R9: reef reads correctly in an 18px picker preview cell, a 22px window row, a 36px coarse-pointer row, and a full SERVER tile — RE-VERIFIED this review: `.rk-flair-reef` is `container-type: size` (globals.css:1127-1131) and both fish traverse in `100cqw` across the whole 22s loop (:1214-1223), so the crossing length follows the container at any mount width — measured correct at 220px and 500px this review; the fixed 22px strip with static centering (`top: 50%` + `margin-top: -11px`, :1247-1252) is the established pattern that holds at 18px/22px/36px and on SERVER tiles; 6× renders show no unreadable sliver and no mostly-empty box
 - [x] A-016 R6: the overlay is still hidden entirely while its row is the HTML5 drag source, so the transform-driven children cannot corrupt the drag ghost
 - [x] A-017 R11: rendering a reef row issues zero external network requests and creates no WebGL context — re-verified: all art is inline SVG data URIs, no canvas/WebGL
@@ -366,9 +386,9 @@ Three stale comments SHALL be corrected: `swatch-popover.tsx` ~L41 ("14 named" �
 
 ### Verification Gates
 
-- [x] A-025 `cd app/backend && go test ./...` passes — run by THIS review (fish round): exit 0, all packages ok including the touched `internal/validate`, `api`, `cmd/rk`
-- [x] A-026 `cd app/frontend && npx tsc --noEmit` passes — run by THIS review (fish round): exit 0
-- [x] A-027 `PNPM_CONFIG_STRICT_DEP_BUILDS=false just test-frontend` passes — run by THIS review (fish round): 226 files / 4804 tests, all passed (49.6s)
+- [x] A-025 `cd app/backend && go test ./...` passes — run by THIS review (fish round): exit 0, all packages ok including the touched `internal/validate`, `api`, `cmd/rk`. RE-RUN post-rename by this review: exit 0, 37 packages ok, no failures
+- [x] A-026 `cd app/frontend && npx tsc --noEmit` passes — run by THIS review (fish round): exit 0. RE-RUN post-rename by this review: exit 0
+- [x] A-027 `PNPM_CONFIG_STRICT_DEP_BUILDS=false just test-frontend` passes — run by THIS review (fish round): 226 files / 4804 tests, all passed (49.6s). RE-RUN post-rename by this review: 4804 passed, exit 0 (49.1s)
 
 ## Notes
 

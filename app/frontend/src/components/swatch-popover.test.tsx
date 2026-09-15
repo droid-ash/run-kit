@@ -645,9 +645,9 @@ describe("SwatchPopover", () => {
       arrow("ArrowDown", 5);
       enter();
       expect(onSelectFlair).toHaveBeenLastCalledWith("rain");
-      // Walk row 1 right: nyan, onepiece, matrix, reef, invaders, warp,
+      // Walk row 1 right: nyan, onepiece, matrix, nemo, invaders, warp,
       // ironman — clamped at the 8th cell.
-      for (const state of ["nyan", "onepiece", "matrix", "reef", "invaders", "warp", "ironman", "ironman"]) {
+      for (const state of ["nyan", "onepiece", "matrix", "nemo", "invaders", "warp", "ironman", "ironman"]) {
         arrow("ArrowRight");
         enter();
         expect(onSelectFlair).toHaveBeenLastCalledWith(state);

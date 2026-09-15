@@ -87,7 +87,7 @@ export type ProjectSession = {
    *  from an older backend; display abbreviation is a frontend concern. */
   sessionPath?: string;
   /** Row flair state: ""/absent (no flair) | "rain" | "scan" | "nyan" |
-   *  "naruto" | "onepiece" | "pacman" | "matrix" | "aquarium" | "reef" |
+   *  "naruto" | "onepiece" | "pacman" | "matrix" | "aquarium" | "nemo" |
    *  "roadrunner" | "invaders" | "cube" | "warp" | "spidey" | "ironman" |
    *  "noon".
    *  Decoration only (FLAIR_STATES in themes.ts) — an ambient CSS-only overlay
@@ -165,7 +165,7 @@ export type WindowInfo = {
   marker?: string;
   /** Row flair state, from the `@rk_win_flair` window option: ""/absent (no
    *  flair) | "rain" | "scan" | "nyan" | "naruto" | "onepiece" | "pacman" |
-   *  "matrix" | "aquarium" | "reef" | "roadrunner" | "invaders" | "cube" |
+   *  "matrix" | "aquarium" | "nemo" | "roadrunner" | "invaders" | "cube" |
    *  "warp" | "spidey" | "ironman" | "noon". Decoration
    *  only (FLAIR_STATES in themes.ts) — an ambient CSS-only overlay with no
    *  status semantics. */

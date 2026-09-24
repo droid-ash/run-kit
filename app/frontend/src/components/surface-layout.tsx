@@ -83,7 +83,7 @@ import {
   selectWebTab,
   setWindowOptions,
 } from "@/api/client";
-import type { CodeBridgeResult } from "@/api/client";
+import type { CodeBridgeResult, CodeServerRestartResult } from "@/api/client";
 import { useToast } from "@/components/toast";
 import { useOptimisticAction } from "@/hooks/use-optimistic-action";
 import {
@@ -321,6 +321,9 @@ interface SurfaceLayoutProps {
   /** Restart supervisor verb for the gui empty state (POSTs the restart
    *  route; a 409 arrives as `{ ok: false, disabled: true }`). */
   onGuiRestart?: () => Promise<GuiRestartResult>;
+  /** The code lens empty state's Restart code-server action (app.tsx passes
+   *  the API client's `restartCodeServer`). Absent ⇒ no button. */
+  onCodeServerRestart?: () => Promise<CodeServerRestartResult>;
   /** Open the supervisor logs (navigates to the rk-gui pane). */
   onGuiOpenLogs?: () => void;
   /** Filled with the gui tile's imperative seams (paste/reconnect) while an
@@ -719,6 +722,7 @@ export function SurfaceLayout({
   onGuiStatsVisibleChange,
   onGuiConnection,
   onGuiRestart,
+  onCodeServerRestart,
   onGuiOpenLogs,
   guiCommandsRef,
   guiActions = [],
@@ -1992,6 +1996,7 @@ export function SurfaceLayout({
             // bridge status.
             fetchBridgeStatus={fetchBridgeStatusFor?.(frameWindowId)}
             reachable={codeReachable}
+            onRestart={onCodeServerRestart}
             shouldReclaimChord={shouldReclaimChord?.("code")}
             onInteract={
               slot >= 0

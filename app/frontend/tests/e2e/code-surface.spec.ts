@@ -859,7 +859,8 @@ test.describe("Code lens & CODE surface (phase 2) — stub down", () => {
    * Proves: reachability governs CONTENT, not availability — with the stub
    * down, the top-bar toggle still renders (capability signals are stable) but
    * the code tile shows the terse portless `code-server not running — check rk
-   * doctor` empty state instead of a dead iframe. Neither code-tile header
+   * doctor` empty state, with its `Restart code-server` recovery button,
+   * instead of a dead iframe. Neither code-tile header
    * verb renders on that state: `Reload editor` has no mounted frame to
    * reload, and `Follow terminal` has no drift (the latched root and the
    * derivation agree).
@@ -868,9 +869,11 @@ test.describe("Code lens & CODE surface (phase 2) — stub down", () => {
    * 1. (Stub is closed — this describe never binds the port.)
    * 2. Create a repo-cwd window; navigate with `?panel=code`; assert the `Code
    *    tile` top-bar toggle is visible.
-   * 3. Assert the `code-surface-empty` state reads `code-server not running —
-   *    check rk doctor` (30s budget — the backend's ~5s probe TTL must expire
-   *    first) and no `Code editor` iframe exists.
+   * 3. Assert the `code-surface-empty` state contains `code-server not running
+   *    — check rk doctor` (30s budget — the backend's ~5s probe TTL must expire
+   *    first; contains, since the state also holds the button), that it offers
+   *    the `Restart code-server` button (not clicked — a click would respawn
+   *    the rig daemon's code-server), and that no `Code editor` iframe exists.
    * 4. Assert the `Reload editor` and `Follow terminal` verbs are both absent
    *    from the tile header.
    */
@@ -884,12 +887,13 @@ test.describe("Code lens & CODE surface (phase 2) — stub down", () => {
     // the top-bar toggle renders; only the CONTENT is the empty state. Generous
     // timeout: the backend's ~5s probe TTL must expire before the flip lands.
     await expect(codeToggle(page)).toBeVisible({ timeout: READY_TIMEOUT });
-    await expect(notRunning(page)).toHaveText(
+    await expect(notRunning(page)).toContainText(
       "code-server not running — check rk doctor",
       {
         timeout: 30_000,
       },
     );
+    await expect(notRunning(page).getByRole("button", { name: "Restart code-server" })).toBeVisible();
     await expect(codeIframe(page)).toHaveCount(0);
     // No frame and no drift: neither header verb renders on the empty state.
     await expect(codeTile(page).getByRole("button", { name: "Reload editor" })).toBeHidden();

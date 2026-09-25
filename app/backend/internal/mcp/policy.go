@@ -9,7 +9,11 @@
 // name collides with it.
 package mcp
 
-import "time"
+import (
+	"time"
+
+	"rk/internal/tmux"
+)
 
 // ToolTimeoutCap bounds every tool call's subprocess (docs/specs/mcp.md
 // § Timeout contract: desktop MCP clients time out well under a minute). A row
@@ -529,15 +533,15 @@ var Table = []Row{
 			serverArg,
 			windowArg,
 			{Name: "layout", Positional: 2, Type: ArgString,
-				Description: "The layout value to set (<shape>:<surface,…>); omit for a read, or use one mutation input instead"},
+				Description: "The layout value to set — the tree form `h(tty,v(code,web))` or a legacy `<shape>:<surface,…>`; omit for a read, or use one mutation input instead"},
 			{Name: "add", Flag: "--add", Type: ArgString, Enum: []string{"tty", "web", "code", "gui"},
-				Description: "Append a surface to the layout (grows the shape)"},
+				Description: "Add a surface (splits the last tile along its longer axis)"},
 			{Name: "rm", Flag: "--rm", Type: ArgString, Enum: []string{"tty", "web", "code", "gui"},
-				Description: "Remove a surface from the layout (collapses the shape)"},
+				Description: "Remove a surface from the layout (its neighbours absorb the space)"},
 			{Name: "promote", Flag: "--promote", Type: ArgString, Enum: []string{"tty", "web", "code", "gui"},
 				Description: "Move a surface to slot A"},
 			{Name: "cycle", Flag: "--cycle", Type: ArgBoolean,
-				Description: "Cycle to the next same-arity shape preset"},
+				Description: "Cycle to the next template for the tile count"},
 			jsonLiteral,
 		},
 		Result:      ResultJSON,
@@ -557,12 +561,12 @@ var Table = []Row{
 			serverArg,
 			{Name: "window", Type: ArgString, Required: true, Pattern: `^@\d+$`,
 				Description: "The tab to address, by window id (@N)"},
-			{Name: "slot", Type: ArgInteger, Minimum: intPtr(1), Maximum: intPtr(8),
-				Description: "The web-tab slot (1-8); required for rm/select/mv"},
+			{Name: "slot", Type: ArgInteger, Minimum: intPtr(1), Maximum: intPtr(tmux.MaxWebTabs),
+				Description: "The web-tab slot; required for rm/select/mv"},
 			{Positional: 2, Format: "{window}[/web/{slot}]"},
 			{Name: "target", Positional: 3, Type: ArgString,
 				Description: "add's target: a URL, :port, file, or directory"},
-			{Name: "to", Positional: 4, Type: ArgInteger, Minimum: intPtr(1), Maximum: intPtr(8),
+			{Name: "to", Positional: 4, Type: ArgInteger, Minimum: intPtr(1), Maximum: intPtr(tmux.MaxWebTabs),
 				Description: "mv's destination slot"},
 			{Name: "show", Flag: "--show", Type: ArgBoolean,
 				Description: "add only: ensure the web surface is in the layout and select the tab"},

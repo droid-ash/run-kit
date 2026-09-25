@@ -21,18 +21,37 @@ import {
 } from "@/lib/code-folder-latch";
 import {
   addSurface,
+  applyTemplate,
+  availableTiles,
+  bareLeaves,
   closeSurface,
+  cycleTemplate,
   effectiveLayout,
+  leafIds,
+  leaves,
   legacyTranslationDecision,
+  openTileKinds,
+  parseLayoutTree,
   promote,
+  readStoredSizes,
   readStoredZoom,
-  serializeLayout,
-  swapWithNext,
+  serializeLayoutTree,
+  slotOrder,
+  swapDirectional,
+  toggleSurface,
   translateLegacyParams,
   writeStoredZoom,
+  zoomLeafKind,
+  SURFACE_LABEL,
   type Layout,
+  type Rect,
   type SurfaceKind,
+  type SwapDirection,
+  type TemplateName,
 } from "@/lib/surface-layout";
+import { parseLeafAddress, pruneDeadLeaves } from "@/lib/layout-tree";
+import { parsePopLeaf, reducePopped } from "@/lib/popout";
+import { usePoppedSet, usePopoutPresence } from "@/hooks/use-popout";
 import { focusIsEngaged, hasReclaimableMatch, shouldSuppressChord, withShortcutHints, formatCombo } from "@/lib/keybindings";
 import { requestQuakeTerminal, findOperatorWindow, resolveQuakeServer } from "@/lib/quake-terminal";
 import { WEB_FIND_OPEN_EVENT } from "@/lib/find-in-page";
@@ -47,7 +66,7 @@ import { useMacros } from "@/hooks/use-macros";
 import { ChromeProvider, useChromeState, useChromeDispatch, SIDEBAR_WIDTH_BOUNDS } from "@/contexts/chrome-context";
 import { ZenProvider, useZenState, useZenDispatch, zenApplies } from "@/contexts/zen-context";
 import { FocusedTerminalProvider } from "@/contexts/focused-terminal-context";
-import { TopBarSlotProvider, useTopBarSlot, useTopBarNotFound, useRegisterTopBarSlot } from "@/contexts/top-bar-slot-context";
+import { TopBarSlotProvider, useTopBarSlot, useTopBarNotFound, useTopBarPopout, useRegisterTopBarSlot, useRegisterTopBarPopout } from "@/contexts/top-bar-slot-context";
 import { FocusedPaneProvider } from "@/contexts/focused-pane-context";
 import { computeKillRedirect } from "@/lib/navigation";
 import {
@@ -57,7 +76,7 @@ import {
 } from "@/lib/last-window-per-server";
 import { deriveEffectiveSessionOrder, computeMoveOrder, computeWindowMoveTarget } from "@/lib/palette/move";
 import { buildViewActions } from "@/lib/palette/view";
-import { buildLayoutActions, buildTileSwitchActions } from "@/lib/palette/layout";
+import { buildLayoutActions, buildTileSwitchActions, type BringWindow } from "@/lib/palette/layout";
 import { buildGuiActions, type GuiPaletteAction } from "@/lib/palette/gui";
 import { closestAspectPreset } from "@/lib/gui-geometry";
 import { buildDesktopPaletteRows } from "@/lib/gui-desktop";
@@ -182,6 +201,7 @@ import { HeadsetIcon } from "@/components/sidebar/icons";
 import { PANE_PANEL_OPEN_STORAGE_KEY, PANE_PANEL_DEFAULT_OPEN } from "@/components/sidebar/status-panel";
 import { canRequestWindowOperatorAction } from "@/components/sidebar/row-flyout-card";
 import { SurfaceLayout } from "@/components/surface-layout";
+import { PoppedOutPlaceholder, PopoutEnded, type PoppedLeafRow } from "@/components/popout-states";
 import type { CodeTileCommands } from "@/components/surface-layout";
 import { CronList } from "@/components/cron-list";
 import { CronLog } from "@/components/cron-log";
@@ -211,9 +231,9 @@ import { SessionTiles } from "@/components/session-tiles/session-tiles";
 import { TmuxCommandsDialog } from "@/components/tmux-commands-dialog";
 import { LogoSpinner } from "@/components/logo-spinner";
 import type { ServerInfo, SelectWindowResult } from "@/api/client";
-import type { ProjectSession } from "@/types";
+import type { ProjectSession, WindowInfo } from "@/types";
 
-import { selectWindow, createSession, createWindow, splitWindow, closePane, killWindow, moveWindow, moveWindowToSession, reloadTmuxConfig, initTmuxConf, setWindowColor as setWindowColorApi, setWindowMarker as setWindowMarkerApi, setWindowRole, setWindowNote, setWindowOptions, setSessionColor as setSessionColorApi, setSessionOrder, setServerOrder, setServerColor as setServerColorApi, setServerProtected, sendToWindow, sendOperatorRequest, sendServerOperatorRequest, refreshStatus, isInfraServer, spawnRiff, forkWindow, sortSessionWindows, addWebTab, selectWebTab, removeWebTab, moveWebTab, reopenClosedWindow, dismissClosedWindow, resumeClosedWindow, muteCron, pinCron, deleteCron, postSettings, restartGui, launchGuiApp, getSettingsEntries, fetchGuiStatus, resizeGui, fetchCodeBridge, restartCodeServer, DAEMON_SERVER, ApiError, HttpError, type SortWindowsBy, type CronEntry } from "@/api/client";
+import { selectWindow, createSession, createWindow, splitWindow, closePane, killWindow, moveWindow, moveWindowToSession, reloadTmuxConfig, initTmuxConf, setWindowColor as setWindowColorApi, setWindowMarker as setWindowMarkerApi, setWindowRole, setWindowNote, setWindowOptions, borrowLayout, returnLayout, setSessionColor as setSessionColorApi, setSessionOrder, setServerOrder, setServerColor as setServerColorApi, setServerProtected, sendToWindow, sendOperatorRequest, sendServerOperatorRequest, refreshStatus, isInfraServer, spawnRiff, forkWindow, sortSessionWindows, addWebTab, selectWebTab, removeWebTab, moveWebTab, reopenClosedWindow, dismissClosedWindow, resumeClosedWindow, muteCron, pinCron, deleteCron, postSettings, restartGui, launchGuiApp, getSettingsEntries, fetchGuiStatus, resizeGui, fetchCodeBridge, restartCodeServer, DAEMON_SERVER, ApiError, HttpError, type SortWindowsBy, type CronEntry } from "@/api/client";
 import { useCronData } from "@/hooks/use-cron";
 import { buildCronActions, type CronActionHandlers } from "@/lib/palette/cron";
 import { buildDataTableActions } from "@/lib/palette/data-table";
@@ -489,7 +509,12 @@ function AppLayoutContent() {
       break;
     }
   }
-  const hideTopBar = zenActive && zenWindowParam !== undefined;
+  // The popout posture (AppShell publishes it through the slot context): the
+  // `?pop=` terminal-route window renders chrome-less — no top bar, no quake
+  // drawer/tongue, no command palette (spec surface-layout.md § Verbs → Pop
+  // out; the popout's keyboard exit is closing the window).
+  const popoutChromeless = useTopBarPopout();
+  const hideTopBar = (zenActive && zenWindowParam !== undefined) || popoutChromeless;
 
   return (
     <GuiOffRequestProvider value={guiOff}>
@@ -534,18 +559,23 @@ function AppLayoutContent() {
         </Suspense>
         {/* The ONE quake-terminal mount — a top-bar-anchored overlay living
             inside the main area (absolute, so pages below keep their layout);
-            every entry point reaches it via the QUAKE_TERMINAL_EVENT seam. */}
-        <Suspense fallback={null}>
-          <QuakeTerminal />
-        </Suspense>
+            every entry point reaches it via the QUAKE_TERMINAL_EVENT seam.
+            Unmounted in the chrome-less popout posture. */}
+        {!popoutChromeless && (
+          <Suspense fallback={null}>
+            <QuakeTerminal />
+          </Suspense>
+        )}
         {/* The mobile standing affordance — the tongue hanging under the top
             bar on every route (desktop's standing affordance is the quake launcher).
             Self-gates on isMobile, hides on operator-less servers
             and on the operator window's own route; renders nothing on
             desktop. */}
-        <Suspense fallback={null}>
-          <QuakeTerminalTongue />
-        </Suspense>
+        {!popoutChromeless && (
+          <Suspense fallback={null}>
+            <QuakeTerminalTongue />
+          </Suspense>
+        )}
       </div>
       {/* The ONE settings-dialog mount (o7q8) — never duplicated per page. */}
       <Suspense fallback={null}>
@@ -557,8 +587,9 @@ function AppLayoutContent() {
     <ServerDialogs />
     {/* The ONE (lazy) command-palette mount (260811-239r) — renders the merged
         list: the active route's registered actions first, then the global
-        groups built above. The per-route palette mounts are gone. */}
-    <LayoutCommandPalette />
+        groups built above. The per-route palette mounts are gone. Unmounted
+        in the chrome-less popout posture. */}
+    {!popoutChromeless && <LayoutCommandPalette />}
     {/* The ONE screen-break mount — a sibling of the `.app-root` glass, never
         inside it: a clipped/transformed ancestor would clip or re-anchor the
         layer's fixed fragments. Renders null while idle. */}
@@ -721,6 +752,7 @@ function RootTopBar() {
       guiToolbar={slot?.guiToolbar}
       layout={slot?.layout}
       onApplyLayout={slot?.onApplyLayout}
+      layoutTemplatesDisabled={slot?.layoutTemplatesDisabled ?? false}
     />
   );
 }
@@ -968,7 +1000,7 @@ function AppShell() {
   const effectiveWindow = currentWindow;
 
   // Surface-layout state (spec surface-layout.md): the terminal route's center
-  // is a LAYOUT of 1–3 surface tiles. The (shape, order) half is shared tab
+  // is a LAYOUT of 1–N surface tiles (offers gated by the size floor). The tree itself is shared tab
   // state — the `@rk_win_layout` window option, read from the payload via
   // `effectiveLayout` (parse + degrade, never a rewrite); every verb POSTs the
   // new value and the SSE tick repaints. The retired `?layout=`/`?view=`/
@@ -980,20 +1012,17 @@ function AppShell() {
   // lib/router-url.ts) types `.view`/`.panel`/`.layout`, so no casts are
   // needed.
   const search = useSearch({ strict: false });
-  // The operator page: the operator window's own terminal route wears the
-  // quake surface on EVERY form factor — the segmented header and the
-  // content swap mount whenever the resolved window's role is `operator`.
-  // `tab` absent/"terminal" (or the gate false) renders the pre-existing
-  // tree byte-identically; the role is known only once the sessions payload
-  // resolves the window, so a cold `?tab=` deep link swaps in a beat after
-  // mount. The legacy `tab=activity` token is normalized to `log` by
-  // validateTerminalSearch before this read.
-  const operatorPage = windowParam != null && currentWindow?.role === "operator";
-  const quakeTab = operatorPage ? (search.tab ?? "terminal") : "terminal";
-  const cronTabActive = quakeTab === "list" || quakeTab === "log";
-  const tasksTabActive = quakeTab === "tasks";
-  // Any non-terminal tab hides (never unmounts) the terminal column.
-  const terminalHidden = cronTabActive || tasksTabActive;
+  // Popout posture (spec surface-layout.md § Verbs → Pop out): `?pop=` names
+  // the leaf a popout window renders chrome-less. This first half is
+  // grammar-only (parsePopLeaf); window existence resolves against the
+  // payload below, after windowsById.
+  const popLeaf = useMemo(
+    () =>
+      windowParam != null && search.pop !== undefined
+        ? parsePopLeaf(search.pop, windowParam)
+        : null,
+    [windowParam, search.pop],
+  );
   // The host-level code-server signal (260811-k3vp; portless since
   // 260811-a2bo) — `reachable` gates only the surface CONTENT (passed to
   // CodeSurface below); availability is gitRoot-derived (hasCode). `null` = no
@@ -1009,37 +1038,176 @@ function AppShell() {
     [effectiveWindow, gui],
   );
 
+  // The route server's window map (payload-derived): the read-time dead-leaf
+  // prune's live set, the palette's Bring candidates and Send Back name
+  // resolution, the borrow helper's held check, the workspace hook's
+  // cross-window root resolution, and SurfaceLayout's foreign-leaf home
+  // resolution all read from it. `@N` is unique per server.
+  const windowsById = useMemo(() => {
+    const map = new Map<string, WindowInfo>();
+    for (const s of sessions) {
+      for (const w of s.windows) map.set(w.windowId, w);
+    }
+    return map;
+  }, [sessions]);
+  // The owning session name per window — a foreign tile's TerminalClient
+  // connects under its home session and registers focus with it.
+  const sessionNameByWindowId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sessions) {
+      for (const w of s.windows) map.set(w.windowId, s.name);
+    }
+    return map;
+  }, [sessions]);
+  const liveWindowIds = useMemo<ReadonlySet<string>>(
+    () => new Set(windowsById.keys()),
+    [windowsById],
+  );
+
+  // Popout posture, payload half: the popout renders while its surface's
+  // window is LIVE (the leaf's home for a foreign leaf, else the route
+  // window), optimistically until the first payload arrives, and — once seen
+  // live — keeps its posture into the ended "Window closed" state when the
+  // window dies (it never navigates, and it never follows the opener's
+  // navigation). A grammar-valid `pop` whose window is KNOWN-absent once the
+  // payload has arrived degrades to the ordinary terminal render (the
+  // validateTerminalSearch drop-don't-error posture).
+  const payloadArrived = ctx.sessionsByServer.has(server);
+  const popWindowLive = popLeaf !== null && windowsById.has(popLeaf.windowId);
+  const popKey = popLeaf !== null ? `${server}:${windowParam ?? ""}:${popLeaf.leafId}` : "";
+  const [popWindowSeen, setPopWindowSeen] = useState(false);
+  useEffect(() => {
+    setPopWindowSeen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popKey]);
+  useEffect(() => {
+    if (popWindowLive) setPopWindowSeen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popKey, popWindowLive]);
+  const popoutPosture =
+    popLeaf !== null && (popWindowLive || popWindowSeen || !payloadArrived);
+  // The ended state: the popout outlived its surface's window — the surface
+  // unmounts, the window stays open, and nothing navigates.
+  const popoutEnded = popLeaf !== null && popWindowSeen && !popWindowLive;
+  // Publish the chrome-less mode to the root layout (top bar, quake drawer,
+  // command palette drop out for the popout's lifetime).
+  useRegisterTopBarPopout(popoutPosture);
+  // The popout's presence on the rk-popout channel: `opened`/`alive`
+  // announcements, the `pagehide` sign-off, and the pop-in/close handling.
+  const popoutPresence = usePopoutPresence(
+    server,
+    windowParam ?? "",
+    popLeaf?.leafId ?? "",
+    popoutPosture,
+  );
+
+  // The operator page: the operator window's own terminal route wears the
+  // quake surface on EVERY form factor — the segmented header and the
+  // content swap mount whenever the resolved window's role is `operator`.
+  // `tab` absent/"terminal" (or the gate false) renders the pre-existing
+  // tree byte-identically; the role is known only once the sessions payload
+  // resolves the window, so a cold `?tab=` deep link swaps in a beat after
+  // mount. The legacy `tab=activity` token is normalized to `log` by
+  // validateTerminalSearch before this read. Never in the popout posture —
+  // the popout renders one tile chrome-less.
+  const operatorPage =
+    !popoutPosture && windowParam != null && currentWindow?.role === "operator";
+  const quakeTab = operatorPage ? (search.tab ?? "terminal") : "terminal";
+  const cronTabActive = quakeTab === "list" || quakeTab === "log";
+  const tasksTabActive = quakeTab === "tasks";
+  // Any non-terminal tab hides (never unmounts) the terminal column.
+  const terminalHidden = cronTabActive || tasksTabActive;
+
   // The layout the window renders: the payload's `@rk_win_layout` value,
   // parsed and degraded (`effectiveLayout`), overlaid by the optimistic
   // `pendingLayout` while a verb's POST is in flight. `pendingLayout` is keyed
   // to the route so a window switch drops a pending write to the old window,
   // and cleared the moment the SSE record carries the written value (the
   // options handler wakes the hub, so confirmation lands in the same tick) or
-  // when the POST rejects (see `applyLayout`).
+  // when the POST rejects (see `applyLayout`). Writers always emit the TREE
+  // form, but the payload may still carry a LEGACY preset string (an
+  // agent's hand-written `set-option`), so the compare parses + serializes:
+  // the pending write settles when the payload parses to the pending tree.
   const [pendingLayout, setPendingLayout] = useState<{
     key: string;
     value: string;
   } | null>(null);
   const baseLayout = useMemo(() => effectiveLayout(effectiveWindow, gui), [effectiveWindow, gui]);
+  // True when the payload's layout parses to the pending tree (a legacy
+  // string serializes to the same tree form). An unparseable payload never
+  // settles the pending write.
+  const pendingLayoutSettled =
+    pendingLayout !== null &&
+    (() => {
+      const parsed = parseLayoutTree(effectiveWindow?.layout);
+      return parsed !== null && serializeLayoutTree(parsed) === pendingLayout.value;
+    })();
   const layout: Layout = useMemo(() => {
-    if (
+    const resolved =
       pendingLayout !== null &&
-      pendingLayout.key === `${server}:${windowParam ?? ""}` &&
-      pendingLayout.value !== effectiveWindow?.layout
-    ) {
-      return effectiveLayout({ ...effectiveWindow, layout: pendingLayout.value }, gui);
-    }
-    return baseLayout;
-  }, [pendingLayout, server, windowParam, effectiveWindow, baseLayout, gui]);
+      !pendingLayoutSettled &&
+      pendingLayout.key === `${server}:${windowParam ?? ""}`
+        ? effectiveLayout({ ...effectiveWindow, layout: pendingLayout.value }, gui)
+        : baseLayout;
+    // Dead foreign leaves drop out at READ time; the pruned tree is persisted
+    // only by the next layout write (no background writer), and the tty
+    // fallback inside pruneDeadLeaves keeps a layout from rendering empty.
+    return pruneDeadLeaves(resolved, liveWindowIds);
+  }, [pendingLayout, pendingLayoutSettled, server, windowParam, effectiveWindow, baseLayout, gui, liveWindowIds]);
   useEffect(() => {
-    if (pendingLayout !== null && pendingLayout.value === effectiveWindow?.layout) {
+    if (pendingLayoutSettled) {
       setPendingLayout(null);
     }
-  }, [pendingLayout, effectiveWindow]);
-  // The lens model's consumers (the palette `View:` actions) key off slot A:
-  // a multi-tile layout reflects slot A's surface; selecting a view collapses
-  // to `single:<view>` (see `switchView`).
-  const resolvedView: ViewName = layout.order[0];
+  }, [pendingLayoutSettled]);
+
+  // The viewer's popped set (spec surface-layout.md § Verbs → Pop out): the
+  // opener hides popped leaves for THIS viewer only (viewer localStorage +
+  // the rk-popout BroadcastChannel) and reflows over the rest; the shared
+  // `@rk_win_layout` is never written by pop-out/pop-in. Disabled in the
+  // popout window itself — it is not an opener (its sweep would otherwise
+  // judge marks against its own presence announcements). The tree argument
+  // is the FULL shared tree so marks whose leaf left the layout are pruned.
+  const { popped, popOut, popIn } = usePoppedSet(
+    server,
+    windowParam ?? "",
+    windowParam != null && !popoutPosture,
+    leafIds(layout),
+  );
+  // The tree SurfaceLayout RENDERS: the popout's single leaf in the popout
+  // posture (keyed to the URL, never the shared layout — the popout keeps
+  // rendering its surface while the surface's window lives, even if the leaf
+  // leaves `@rk_win_layout`); the reduced tree in the opener posture; the
+  // full tree otherwise (and under the all-popped placeholder, where every
+  // tile renders hidden through the `popped` prop so their streams survive).
+  // Every shared-layout MUTATION below still computes from the full `layout`.
+  const popTree = useMemo<Layout | null>(
+    () =>
+      popLeaf !== null
+        ? { leaf: popLeaf.kind, ...(popLeaf.home !== undefined ? { home: popLeaf.home } : {}) }
+        : null,
+    [popLeaf],
+  );
+  const reducedLayout = useMemo<{ tree: Layout | null; present: string[] }>(
+    () => (popped.length > 0 ? reducePopped(layout, popped) : { tree: layout, present: [] }),
+    [layout, popped],
+  );
+  const allPopped = popped.length > 0 && reducedLayout.tree === null;
+  const renderLayout: Layout =
+    popoutPosture && popTree !== null
+      ? popTree
+      : allPopped
+        ? layout
+        : (reducedLayout.tree ?? layout);
+  // The layoutRects seam into the mounted SurfaceLayout (the
+  // `codeCommandsRef` pattern): the desktop add/directional-swap verbs read
+  // the leaves' REAL rects through it; mobile and CLI callers use the
+  // nominal box (an absent getter ⇒ undefined ⇒ nominal).
+  const layoutRectsRef = useRef<(() => Map<string, Rect>) | null>(null);
+  // The lens model's consumers (the palette `View:` actions) key off slot A —
+  // the template's main tile (`slotOrder`), the first leaf in reading order
+  // for a custom tree: a multi-tile layout reflects slot A's surface;
+  // selecting a view collapses to the bare `<view>` leaf (see `switchView`).
+  const resolvedView: ViewName = slotOrder(layout)[0];
 
   // An external `@rk_win_layout` write (an agent's `set-option -w`, a snapshot
   // restore) repaints on the next option tick — the layout write IS the expand
@@ -1100,7 +1268,10 @@ function AppShell() {
       navigate({
         to: "/$server/$window",
         params: { server, window: windowParam },
-        search: {},
+        // `?pop=` is LIVE state (the chrome-less popout render), never a
+        // retired-param translation input — it survives the bare-route
+        // rewrite.
+        search: search.pop !== undefined ? { pop: search.pop } : {},
         replace: true,
       });
     }
@@ -1113,7 +1284,7 @@ function AppShell() {
     if (!effectiveWindow.codeRoot && codeFolder && codeFolder.trim() !== "") {
       setWindowOptions(server, windowParam, { "@rk_win_code_root": codeFolder }).catch(() => {});
     }
-  }, [server, windowParam, effectiveWindow, search.layout, search.view, search.panel, navigate]);
+  }, [server, windowParam, effectiveWindow, search.layout, search.view, search.panel, search.pop, navigate]);
 
   // Per-server last-window memory: record the viewed window against its server
   // on EVERY arrival path (sidebar click, palette, deep link, board hop, tmux
@@ -1124,6 +1295,23 @@ function AppShell() {
   useEffect(() => {
     if (server && windowParam) writeLastWindow(server, windowParam);
   }, [server, windowParam]);
+
+  // The code TILE's window: the bare `code` leaf resolves to the route
+  // window; a foreign `@N/code` leaf's tile reads and writes its HOME
+  // window's `@rk_win_code_root` and workspace — the seed effect, the
+  // workspace hook, and the follow writes below all target it (R19). The
+  // derivations read the RENDERED tree (`renderLayout`): a popped code leaf
+  // is not rendered in the opener (its retained frame is evicted), so it
+  // seeds/fetches nothing there, while the popout's one-leaf tree drives its
+  // own seed + workspace derivation.
+  const codeTileHome = useMemo(() => {
+    const ids = leafIds(renderLayout);
+    const i = leaves(renderLayout).indexOf("code");
+    return i >= 0 ? (parseLeafAddress(ids[i])?.home ?? null) : null;
+  }, [renderLayout]);
+  const codeTileWindowId = codeTileHome ?? windowParam;
+  const codeTileWindow: ViewWindow | null =
+    codeTileHome === null ? effectiveWindow : (windowsById.get(codeTileHome) ?? null);
 
   // Code-root seed (spec right-panel.md § The code lens): the first time the
   // code tile actually renders for a window whose `@rk_win_code_root` is still
@@ -1143,14 +1331,14 @@ function AppShell() {
   const codeRootSeedInFlightRef = useRef(new Set<string>());
   const [codeSeedRejections, setCodeSeedRejections] = useState<Set<string>>(new Set());
   useEffect(() => {
-    if (!windowParam || !effectiveWindow) return;
-    const seed = codeRootSeed(effectiveWindow, layout);
+    if (!codeTileWindowId || !codeTileWindow) return;
+    const seed = codeRootSeed(codeTileWindow, renderLayout);
     if (seed === null) return;
-    const key = `${server}:${windowParam}`;
+    const key = `${server}:${codeTileWindowId}`;
     if (codeRootSeedInFlightRef.current.has(key)) return;
     if (codeSeedRejections.has(`${key}:${seed}`)) return;
     codeRootSeedInFlightRef.current.add(key);
-    setWindowOptions(server, windowParam, { "@rk_win_code_root": seed }).catch((err: unknown) => {
+    setWindowOptions(server, codeTileWindowId, { "@rk_win_code_root": seed }).catch((err: unknown) => {
       // A deterministic refusal (the backend's 400 path validation) records a
       // rejection so the identical value never re-POSTs; anything transient
       // (network, 5xx) only releases the in-flight mark so a later tick can
@@ -1163,17 +1351,17 @@ function AppShell() {
         );
       }
     });
-  }, [server, windowParam, effectiveWindow, layout, codeSeedRejections]);
+  }, [server, codeTileWindowId, codeTileWindow, renderLayout, codeSeedRejections]);
 
   // The degrade signal for the workspace hook: the CURRENT seed value has
   // already been refused by the backend, so the substrate root will never
   // arrive for it. Flips back to false the moment the root changes (a fresh
   // attempt) or the payload carries a codeRoot (a retry landed).
-  const pendingCodeRootSeed = codeRootSeed(effectiveWindow, layout);
+  const pendingCodeRootSeed = codeRootSeed(codeTileWindow, renderLayout);
   const codeSeedRejected =
-    windowParam != null &&
+    codeTileWindowId != null &&
     pendingCodeRootSeed !== null &&
-    codeSeedRejections.has(`${server}:${windowParam}:${pendingCodeRootSeed}`);
+    codeSeedRejections.has(`${server}:${codeTileWindowId}:${pendingCodeRootSeed}`);
 
   // Workspace mount gating (spec right-panel.md § The code lens): the seed
   // effect above is the only WRITE here; this hook only READS — once the
@@ -1181,31 +1369,21 @@ function AppShell() {
   // workspace file and the code tile mounts at the `?workspace=` URL (pending
   // until then, `?folder=` degrade on a non-409 failure or a refused seed).
   // `followFolder` is the follow rule's re-derivation half for the handler
-  // below.
+  // below. The hook's window is the code TILE's window (a foreign code tile's
+  // home), so a borrowed editor derives and follows against its own tab.
   //
   // The resolved srcs live in a per-window MAP that survives window switches
   // (a revisit resolves synchronously — no pending flash — and a retained
   // frame's src outlives its window's active period). The map's cross-window
-  // inputs: `codeWindowsById` (the lookup's per-window root resolution) and
+  // inputs: `windowsById` (the lookup's per-window root resolution) and
   // `liveWindowIds` (pruning dead windows' entries alongside their frames).
-  const codeWindowsById = useMemo(() => {
-    const map = new Map<string, ViewWindow>();
-    for (const s of sessions) {
-      for (const w of s.windows) map.set(w.windowId, w);
-    }
-    return map;
-  }, [sessions]);
-  const liveWindowIds = useMemo<ReadonlySet<string>>(
-    () => new Set(codeWindowsById.keys()),
-    [codeWindowsById],
-  );
   const { codeSrc, codeSrcFor, followSrc, followFolder } = useCodeWorkspace(
     server,
-    windowParam,
-    effectiveWindow,
-    layout.order.includes("code"),
+    codeTileWindowId,
+    codeTileWindow,
+    leaves(renderLayout).includes("code"),
     codeSeedRejected,
-    { windowsById: codeWindowsById, liveWindowIds },
+    { windowsById, liveWindowIds },
   );
 
   // The first-boot rescue's status-read seam, as a PER-WINDOW factory: a
@@ -1225,8 +1403,8 @@ function AppShell() {
   // code root (`""` when the window is gone or unresolvable — never an
   // eviction input).
   const codeRootForWindow = useCallback(
-    (windowId: string) => codeRootFor(codeWindowsById.get(windowId) ?? null),
-    [codeWindowsById],
+    (windowId: string) => codeRootFor(windowsById.get(windowId) ?? null),
+    [windowsById],
   );
 
   // Follow write (spec right-panel.md § The code lens): after the seed, the
@@ -1238,10 +1416,10 @@ function AppShell() {
   // URL — a sanctioned parent re-navigation, nonce-gated in CodeSurface.
   const handleCodeFolderNavigated = useCallback(
     (folder: string): Promise<void> => {
-      if (!windowParam || !effectiveWindow || folder === codeRootFor(effectiveWindow)) {
+      if (!codeTileWindowId || !codeTileWindow || folder === codeRootFor(codeTileWindow)) {
         return Promise.resolve();
       }
-      return setWindowOptions(server, windowParam, { "@rk_win_code_root": folder })
+      return setWindowOptions(server, codeTileWindowId, { "@rk_win_code_root": folder })
         .then(() => followFolder(folder))
         .catch((err: Error) => {
           addToast(err.message || "Failed to set code folder", "error");
@@ -1251,7 +1429,7 @@ function AppShell() {
           throw err;
         });
     },
-    [server, windowParam, effectiveWindow, addToast, followFolder],
+    [server, codeTileWindowId, codeTileWindow, addToast, followFolder],
   );
 
   // The Follow terminal verb's write half: the SAME latch POST + follow as
@@ -1264,31 +1442,31 @@ function AppShell() {
   // with the editor-initiated contract.
   const handleCodeFollowTerminal = useCallback(
     (folder: string): Promise<void> => {
-      if (!windowParam || !effectiveWindow || folder === codeRootFor(effectiveWindow)) {
+      if (!codeTileWindowId || !codeTileWindow || folder === codeRootFor(codeTileWindow)) {
         return Promise.resolve();
       }
-      return setWindowOptions(server, windowParam, { "@rk_win_code_root": folder })
+      return setWindowOptions(server, codeTileWindowId, { "@rk_win_code_root": folder })
         .then(() => followFolder(folder, { degradeToFolder: true }))
         .catch((err: Error) => {
           addToast(err.message || "Failed to set code folder", "error");
           throw err;
         });
     },
-    [server, windowParam, effectiveWindow, addToast, followFolder],
+    [server, codeTileWindowId, codeTileWindow, addToast, followFolder],
   );
 
   // The ONE layout mutation path (write discipline — user-initiated mutations
-  // only): POST the serialized layout to `@rk_win_layout` through the unified
-  // /options seam; the SSE tick repaints. `pendingLayout` renders the new
-  // arrangement optimistically until the payload confirms; a rejection reverts
-  // to the payload's layout with the same toast other option writes use. Tile
-  // verbs, surface toggles, and the palette `View:`/`Tile:` actions all funnel
-  // through this. Stable across SSE ticks.
+  // only): POST the serialized TREE form to `@rk_win_layout` through the
+  // unified /options seam; the SSE tick repaints. `pendingLayout` renders the
+  // new arrangement optimistically until the payload confirms; a rejection
+  // reverts to the payload's layout with the same toast other option writes
+  // use. Tile verbs, surface toggles, and the palette `View:`/`Tile:` actions
+  // all funnel through this. Stable across SSE ticks.
   const applyLayout = useCallback(
     (next: Layout) => {
       if (!windowParam) return;
       const key = `${server}:${windowParam}`;
-      const value = serializeLayout(next);
+      const value = serializeLayoutTree(next);
       setPendingLayout({ key, value });
       setWindowOptions(server, windowParam, { "@rk_win_layout": value }).catch(
         (err: Error) => {
@@ -1302,32 +1480,56 @@ function AppShell() {
     [server, windowParam, addToast],
   );
 
-  // Switch the current window's lens (window-view spec R2/R7) — R12's shim:
-  // selecting a view sets the layout to `single:<view>` through the shared
-  // mutation path (an `@rk_win_layout` write — the choice is shared tab
-  // state). Never mutates `@rk_win_lens` (the retired write-compat key).
-  const switchView = useCallback(
-    (view: ViewName) => applyLayout({ shape: "single", order: [view] }),
-    [applyLayout],
+  // Bring a foreign surface into this layout (palette `Tile: Bring … here`,
+  // and later the sidebar row-drag drop): when the address is unheld — or
+  // already held by THIS window — the write is a plain applyLayout; when a
+  // third window holds it, the borrow endpoint unholds it there and writes
+  // this window's tree in one chained server-side write, so no viewer ever
+  // observes the surface in two tabs. The borrow path mirrors applyLayout's
+  // optimistic overlay and its rejection posture (revert + toast).
+  const borrowInto = useCallback(
+    (leafAddr: string, tree: Layout) => {
+      if (!windowParam) return;
+      const parsed = parseLeafAddress(leafAddr);
+      if (!parsed) return;
+      const holder = windowsById.get(parsed.home)?.awayIn?.[parsed.kind];
+      if (holder === undefined || holder === windowParam) {
+        applyLayout(tree);
+        return;
+      }
+      const key = `${server}:${windowParam}`;
+      const value = serializeLayoutTree(tree);
+      setPendingLayout({ key, value });
+      borrowLayout(server, { to: windowParam, leaf: leafAddr, tree: value }).catch(
+        (err: Error) => {
+          setPendingLayout((p) => (p?.key === key && p.value === value ? null : p));
+          addToast(err.message || "Failed to apply layout", "error");
+        },
+      );
+    },
+    [server, windowParam, windowsById, applyLayout, addToast],
   );
 
-  // Surface toggle (right-panel P1/P6, retargeted to tiles in 260812-ab5v):
-  // an OPEN surface closes its tile (closeSurface — arity
-  // collapses), a closed one appends a tile (addSurface — 1→2 `split-h`,
-  // 2→3 `main-left`). A disallowed mutation (closing the last tile, adding a
-  // fourth) is a null no-op; the boolean return reports whether the mutation
-  // applied (focus-hop's open-then-focus flag depends on it). Stable across
-  // SSE ticks. Shared by the top-bar surface-toggle group, the tile verbs,
-  // and the palette.
-  const togglePanel = useCallback(
-    (surface: SurfaceName) => {
-      const next = layout.order.includes(surface)
-        ? closeSurface(layout, surface)
-        : addSurface(layout, surface);
-      if (next) applyLayout(next);
-      return next !== null;
+  // Send a held surface back to its home window (palette `Tile: Send Back`,
+  // the tile header's ↩, the placeholder's bring back): the return endpoint
+  // recomputes both trees from current tmux state, so the client sends no
+  // tree; the SSE tick repaints both tabs.
+  const sendHome = useCallback(
+    (from: string, leafAddr: string) => {
+      returnLayout(server, { from, leaf: leafAddr }).catch((err: Error) => {
+        addToast(err.message || "Failed to send tile home", "error");
+      });
     },
-    [layout, applyLayout],
+    [server, addToast],
+  );
+
+  // Switch the current window's lens (window-view spec R2/R7) — R12's shim:
+  // selecting a view sets the layout to the bare `<view>` leaf through the
+  // shared mutation path (an `@rk_win_layout` write — the choice is shared
+  // tab state). Never mutates `@rk_win_lens` (the retired write-compat key).
+  const switchView = useCallback(
+    (view: ViewName) => applyLayout({ leaf: view }),
+    [applyLayout],
   );
 
   // The surfaces the current window can tile (shortcut order, tty/code/web —
@@ -1337,6 +1539,24 @@ function AppShell() {
     () => availableSurfaces(effectiveWindow, gui),
     [effectiveWindow, gui],
   );
+
+  // The palette's `Tile: Bring … here` candidates: every OTHER window on the
+  // route server with its lendable surfaces (per-window availability minus
+  // gui, which is never lendable — one desktop per host). Already-in-layout
+  // and size-floor gating happen in the builder (addSurface's refusal).
+  const bringWindows = useMemo<BringWindow[]>(() => {
+    if (!windowParam) return [];
+    const out: BringWindow[] = [];
+    for (const w of windowsById.values()) {
+      if (w.windowId === windowParam) continue;
+      out.push({
+        id: w.windowId,
+        name: w.name,
+        surfaces: availableTiles(w, gui).filter((kind) => kind !== "gui"),
+      });
+    }
+    return out;
+  }, [windowsById, windowParam, gui]);
 
   // ── gui tile state ───────────────────────────────────────────────────────
   // The tile's RFB connection report (the R11 seam) — the top-bar toggle dot
@@ -1483,11 +1703,11 @@ function AppShell() {
   // toggled back into a zoom. Plain zoom verbs (⛶, `Layout: Expand`/`Restore`)
   // drive the seam directly and never touch zen state.
   const toggleZen = useCallback(() => {
-    const decision = resolveZenToggle({ zenActive, zenZoomed, layoutZoomed }, layout.order.length);
+    const decision = resolveZenToggle({ zenActive, zenZoomed, layoutZoomed }, leaves(layout).length);
     setZenActive(decision.zenActive);
     setZenZoomed(decision.zenZoomed);
     if (decision.fireZoomToggle) layoutZoomToggleRef.current?.();
-  }, [zenActive, zenZoomed, layoutZoomed, layout.order.length, setZenActive, setZenZoomed]);
+  }, [zenActive, zenZoomed, layoutZoomed, layout, setZenActive, setZenZoomed]);
 
   // ── gui verbs (spec gui.md) ──────────────────────────────────────────────
   // Supervisor logs: the rk-gui session's `host` window on the rk-daemon
@@ -1612,7 +1832,7 @@ function AppShell() {
       enabled: gui?.enabled === true,
       reachable: gui?.reachable === true,
       backend: gui?.backend ?? "",
-      tileOpen: layout.order.includes("gui"),
+      tileOpen: leaves(layout).includes("gui"),
       connected: guiConnected,
       coarsePointer,
       zoom: guiZoom,
@@ -1685,7 +1905,7 @@ function AppShell() {
   }, [
     windowParam,
     gui,
-    layout.order,
+    layout,
     guiConnected,
     coarsePointer,
     guiZoom,
@@ -1718,15 +1938,19 @@ function AppShell() {
   // Mobile active tile (spec surface-layout.md § Mobile): below
   // `isMobileViewport()` the center renders ONE tile; the top-bar switch group
   // swaps WHICH surface that is. The choice is the per-viewer zoom key
-  // (`rk-layout-zoom:{server}:{@N}` — a surface kind, the same key desktop
-  // zoom persists): a stored kind still in the layout wins, else slot A. The
-  // epoch re-reads the key after each `switchToTile` write — localStorage
-  // writes don't re-render.
+  // (`rk-layout-zoom:{server}:{@N}` — a leaf id, the same key desktop zoom
+  // persists): a stored id whose KIND is still in the layout wins, else slot
+  // A (the template's main tile — `slotOrder` — so a main-right phone shows
+  // its main tile). The epoch re-reads the key after each `switchToTile`
+  // write — localStorage writes don't re-render.
   const [mobileZoomEpoch, setMobileZoomEpoch] = useState(0);
   const mobileActiveTile: SurfaceName = useMemo(() => {
     void mobileZoomEpoch;
     const stored = windowParam ? readStoredZoom(server, windowParam) : undefined;
-    return stored && layout.order.includes(stored) ? stored : layout.order[0];
+    const storedKind = stored ? zoomLeafKind(stored) : undefined;
+    return storedKind && leaves(layout).includes(storedKind)
+      ? storedKind
+      : slotOrder(layout)[0];
   }, [server, windowParam, layout, mobileZoomEpoch]);
 
   // Switch-to-tile (mobile-primary): an ALREADY-OPEN surface writes only the
@@ -1734,14 +1958,16 @@ function AppShell() {
   // reading `web` leaves a desktop viewer's arrangement alone. An
   // available-but-not-open surface grows the SHARED layout through
   // `addSurface` → `applyLayout` (the same add mutation every entry point
-  // uses — a phone posture must not destroy shared tab state) AND writes the
-  // zoom key so the phone shows it. A `null` growth (3 tiles already) is a
-  // no-op — the switch-group button and the `Tile: Switch to` palette row
-  // render disabled instead (`switchTargetDisabled`).
+  // uses — a phone posture must not destroy shared tab state; no rects here,
+  // so the split resolves against the nominal box) AND writes the zoom key so
+  // the phone shows it. A `null` growth (no split fits the nominal-box size
+  // floor) is a no-op — the
+  // switch-group button and the `Tile: Switch to` palette row render disabled
+  // instead (`switchTargetDisabled`).
   const switchToTile = useCallback(
     (surface: SurfaceName) => {
       if (!windowParam) return;
-      if (!layout.order.includes(surface)) {
+      if (!leaves(layout).includes(surface)) {
         const next = addSurface(layout, surface);
         if (!next) return;
         applyLayout(next);
@@ -1760,7 +1986,8 @@ function AppShell() {
   // work then mirrors `rk present` (add the tab → ensure a web surface →
   // select the tab). The server dedupes an identical stored address, so a
   // re-open selects the existing tab instead of growing the family. A layout
-  // that cannot grow (three tiles, no web) still keeps the added tab for
+  // that cannot grow (no split fits the size floor, no web tile) still keeps
+  // the added tab for
   // later but opens a browser tab now rather than no-oping — decided and
   // opened BEFORE the first await: `window.open` rides the click's transient
   // user activation, which browsers revoke once the handler yields, so a
@@ -1773,8 +2000,14 @@ function AppShell() {
       if (!(event instanceof CustomEvent) || !isHelpTopic(event.detail)) return;
       const topic = event.detail;
       event.preventDefault();
-      const hasWeb = layout.order.includes("web");
-      const grown = hasWeb ? null : addSurface(layout, "web");
+      const hasWeb = leaves(layout).includes("web");
+      const grown = hasWeb
+        ? null
+        : addSurface(
+            layout,
+            "web",
+            isMobile ? undefined : (layoutRectsRef.current?.() ?? undefined),
+          );
       const fullLayout = !hasWeb && grown === null;
       if (fullLayout) window.open(topic.url, "_blank", "noopener,noreferrer");
       void (async () => {
@@ -1792,43 +2025,111 @@ function AppShell() {
   }, [server, windowParam, isMobile, layout, applyLayout, switchToTile, addToast]);
 
   // Switch-group/palette gating: a not-open surface whose growth is
-  // disallowed (`addSurface` → null, e.g. 3 tiles already) renders disabled
+  // disallowed (`addSurface` → null — no split fits the nominal-box floor)
+  // renders disabled
   // instead of no-oping silently (the toggle group's full-layout disabled
   // affordance, extended to switch mode).
   const switchTargetDisabled = useCallback(
     (surface: SurfaceName) =>
-      !layout.order.includes(surface) && addSurface(layout, surface) === null,
+      !leaves(layout).includes(surface) && addSurface(layout, surface) === null,
     [layout],
   );
 
-  // Focused tile (260812-wfic R2/R8): SurfaceLayout owns the focused SLOT as
+  // Focused tile (260812-wfic R2/R8): SurfaceLayout owns the focused LEAF as
   // transient state (the zoom precedent — the per-window reset comes from its
   // `[server, windowId]` reset effect) and reports the focused KIND up via
-  // `onFocusedKindChange`; the shell mirrors only the kind — it's all the
-  // `ttyOnly` dispatcher gate and the `Tile: Focus <Surface>` palette
-  // entries need. On mobile the single VISIBLE slot counts as focused (the
-  // switch-group selection), so the split chords fire only when the shown tile
-  // is tty. `focusTileRef` is the palette's focus-by-kind seam (the
-  // `zoomToggleRef` pattern). Until the component reports (first render,
-  // window switch), slot A is the fallback — never a hardcoded tty guess, so
-  // a persisted layout with a non-tty slot A can't briefly enable the split
-  // chords. Resets on a window switch.
-  const [reportedFocusedKind, setReportedFocusedKind] = useState<SurfaceKind | null>(null);
-  useEffect(() => setReportedFocusedKind(null), [server, windowParam]);
+  // `onFocusedKindChange` plus the leaf id via `onFocusedLeafChange`; the
+  // shell mirrors both — the kind feeds the `ttyOnly` dispatcher gate and the
+  // `Tile: Focus <Surface>` palette entries, the leaf id the palette's
+  // directional `Tile: Swap …` rows. On mobile the single VISIBLE leaf counts
+  // as focused (the switch-group selection), so the split chords fire only
+  // when the shown tile is tty. `focusTileRef` is the palette's focus-by-kind
+  // seam (the `zoomToggleRef` pattern). Until the component reports (first
+  // render, window switch), slot A is the fallback — never a hardcoded tty
+  // guess, so a persisted layout with a non-tty slot A can't briefly enable
+  // the split chords. Each report is STAMPED with its window key and counts
+  // only for that window: a window switch invalidates the mirror by key
+  // mismatch (no clearing effect — a child effect's fresh report would land
+  // BEFORE a parent's same-render clearing effect and be wiped).
+  const focusWindowKey = `${server}:${windowParam ?? ""}`;
+  const [reportedFocusedKind, setReportedFocusedKind] = useState<{
+    key: string;
+    kind: SurfaceKind;
+  } | null>(null);
+  const [reportedFocusedLeafId, setReportedFocusedLeafId] = useState<{
+    key: string;
+    leafId: string;
+  } | null>(null);
   const focusedTileKind: SurfaceKind = isMobile
     ? mobileActiveTile
-    : (reportedFocusedKind ?? layout.order[0]);
+    : ((reportedFocusedKind?.key === focusWindowKey ? reportedFocusedKind.kind : null) ??
+      slotOrder(layout)[0]);
+  // The palette's directional swaps act on the FOCUSED leaf (desktop
+  // multi-tile only — mobile renders one tile, nothing to swap with).
+  const focusedLeafId =
+    !isMobile && leaves(layout).length > 1
+      ? reportedFocusedLeafId !== null &&
+        reportedFocusedLeafId.key === focusWindowKey &&
+        leafIds(layout).includes(reportedFocusedLeafId.leafId)
+        ? reportedFocusedLeafId.leafId
+        : leafIds(layout)[0]
+      : undefined;
   const layoutFocusTileRef = useRef<((kind: SurfaceKind) => void) | null>(null);
+
+  // Surface toggle (right-panel P1/P6, retargeted to tiles in 260812-ab5v):
+  // an OPEN surface — one with a BARE leaf; a kind present only as foreign
+  // leaves reads as closed — closes its first bare tile (closeSurface; the
+  // neighbours absorb its share; a foreign leaf is never the close target), a
+  // closed one appends a tile
+  // (addSurface splits the FOCUSED tile — `focusedLeafId`, the last leaf in
+  // reading order by default — along its longer axis, gated by the
+  // per-viewport size floor, using the leaves' REAL rects from the
+  // layoutRects seam on desktop and the nominal box on mobile, with the
+  // viewer's stored divider sizes threaded so the floor check matches the
+  // rendered sizes). A disallowed mutation (closing the last tile, an
+  // add no split fits the floor for) is a null no-op; the boolean return
+  // reports whether the mutation applied (focus-hop's open-then-focus flag
+  // depends on it). Stable
+  // across SSE ticks. Shared by the top-bar surface-toggle group, the tile
+  // verbs, and the palette. Defined BELOW the focusedLeafId mirror — the
+  // deps array needs it.
+  const togglePanel = useCallback(
+    (surface: SurfaceName) => {
+      const next = toggleSurface(
+        layout,
+        surface,
+        isMobile ? undefined : (layoutRectsRef.current?.() ?? undefined),
+        focusedLeafId,
+        windowParam ? readStoredSizes(server, windowParam, layout) : undefined,
+      );
+      if (next) applyLayout(next);
+      return next !== null;
+    },
+    [layout, applyLayout, isMobile, focusedLeafId, server, windowParam],
+  );
+
+  // The focused tile's OWN window (a foreign leaf's home, the route window
+  // for a bare leaf): the compose strip's focus-memory gate and the tty
+  // tile's split/close verbs target it. Desktop multi-tile reads the reported
+  // focused leaf; single-tile and mobile renders have exactly one candidate.
+  const focusedTileWindowId = useMemo(() => {
+    if (!windowParam) return undefined;
+    const ids = leafIds(layout);
+    const leafId =
+      focusedLeafId ??
+      (isMobile ? ids[leaves(layout).indexOf(mobileActiveTile)] : ids[0]);
+    return (leafId ? parseLeafAddress(leafId)?.home : undefined) ?? windowParam;
+  }, [windowParam, layout, focusedLeafId, isMobile, mobileActiveTile]);
 
   // Open-then-focus landing flag: when a chord (focus-hop, or a tile chord's
   // hidden arm) opened a CLOSED tile, this per-kind flag makes the effect
   // below focus it once the tile lands in the layout (SurfaceLayout's
-  // focusTileRef closure re-registers with the new order — child effects run
+  // focusTileRef closure re-registers with the new tree — child effects run
   // before this parent one).
   const focusOnLandingRef = useRef<SurfaceKind | null>(null);
   useEffect(() => {
     const kind = focusOnLandingRef.current;
-    if (kind !== null && layout.order.includes(kind)) {
+    if (kind !== null && leaves(layout).includes(kind)) {
       focusOnLandingRef.current = null;
       layoutFocusTileRef.current?.(kind);
     }
@@ -2104,7 +2405,14 @@ function AppShell() {
   // the provider owns the one-shot health fetch, and a settings-dialog rename
   // retitles the tab live (o7q8).
   const { displayName: instanceDisplayName } = useInstanceName();
-  useBrowserTitle(sessionName, windowParam, instanceDisplayName);
+  // The popout's title is `<Surface> · <window name>` (the leaf's HOME window
+  // for a foreign leaf — the surface's owner); the id stands in until the
+  // payload resolves the name.
+  const popoutTitle =
+    popoutPosture && popLeaf !== null
+      ? `${SURFACE_LABEL[popLeaf.kind]} · ${windowsById.get(popLeaf.windowId)?.name ?? popLeaf.windowId}`
+      : undefined;
+  useBrowserTitle(sessionName, windowParam, instanceDisplayName, popoutTitle);
 
   // Sidebar drag-resize handler (desktop only). Width state lives in
   // `ChromeContext` (lifted from per-route local state) so AppShell and
@@ -2243,8 +2551,11 @@ function AppShell() {
     if (currentWindow) currentWindowEverSeenRef.current = true;
   }, [server, sessionName, windowParam, currentWindow]);
 
-  // Redirect when the current session/window no longer exists (e.g. window/session killed)
+  // Redirect when the current session/window no longer exists (e.g. window/session killed).
+  // Never in the popout posture: the popout does not navigate — a dead window
+  // renders the ended "Window closed" state instead.
   useEffect(() => {
+    if (popoutPosture) return;
     const target = computeKillRedirect({
       sessionName,
       windowId: windowParam,
@@ -2267,7 +2578,7 @@ function AppShell() {
     } else {
       navigate({ to: "/$server", params: { server }, replace: true });
     }
-  }, [sessionName, windowParam, sessions, currentSession, currentWindow, isConnected, navigate, server]);
+  }, [sessionName, windowParam, sessions, currentSession, currentWindow, isConnected, navigate, server, popoutPosture]);
 
   // Active window sync (truth = tmux). The SSE-derived `activeWindow`
   // drives the sidebar selection (see `WindowRow.isSelected`) and the URL
@@ -2593,6 +2904,9 @@ function AppShell() {
   // re-armed per window-route so subsequent navigations within the same window
   // don't replay the alignment (which would clobber user clicks).
   useEffect(() => {
+    // The popout never aligns tmux to its URL: its window id is fixed at
+    // open, and selecting it would yank every other viewer of the server.
+    if (popoutPosture) return;
     if (!windowParam || !currentSession) return;
     const windowKey = `${server}|${windowParam}`;
     if (lastAlignedSessionRef.current !== windowKey) {
@@ -2633,13 +2947,16 @@ function AppShell() {
       posted.catch(() => {});
       beginPendingSwitch({ server, windowId: windowParam }, { posted });
     }
-  }, [server, windowParam, currentSession, activeWindow, beginPendingSwitch]);
+  }, [server, windowParam, currentSession, activeWindow, beginPendingSwitch, popoutPosture]);
 
   // URL writeback: whenever the SSE snapshot says a different window is
   // active than what the URL reflects, write the URL via `replace`. No
   // debounce — tmux truth wins always. Dialogs suppress the writeback to
   // keep focus-stealing re-renders from interrupting user input.
   useEffect(() => {
+    // The popout's route is fixed for its lifetime — it never follows the
+    // opener's (or tmux's) navigation.
+    if (popoutPosture) return;
     if (!activeWindow || !sessionName) return;
     if (dialogOpenRef.current) return;
     // Honor a pending click: while the URL still points at the optimistically
@@ -2697,7 +3014,7 @@ function AppShell() {
       search: {},
       replace: true,
     });
-  }, [activeWindow, sessionName, windowParam, navigate, server, clearPendingSwitchTracking]);
+  }, [activeWindow, sessionName, windowParam, navigate, server, clearPendingSwitchTracking, popoutPosture]);
 
   // Navigation callback for sidebar/breadcrumbs. tmux is the source of truth,
   // but a click is explicit user intent: we navigate the URL optimistically
@@ -2975,7 +3292,7 @@ function AppShell() {
     // (ui-patterns.md § Window-Switch Slide Transition).
     ungatedIds: new Set(
       flatWindows
-        .filter((fw) => effectiveLayout(fw.window, gui).order[0] !== "tty")
+        .filter((fw) => slotOrder(effectiveLayout(fw.window, gui))[0] !== "tty")
         .map((fw) => fw.window.windowId),
     ),
     currentWindowId: windowParam ?? "",
@@ -4058,13 +4375,16 @@ function AppShell() {
   // non-terminal tab (the in-tile dock would hide with the terminal column),
   // so `operatorPage` is excluded from the in-tile predicate. The dock is a
   // property of the route/layout, never of the preference — the tongue lives
-  // at the same dock the expanded strip would.
+  // at the same dock the expanded strip would. The popout posture is
+  // chrome-less: no compose strip at all (no in-tile dock, and the Shell
+  // bottombar slot renders null below).
   const inTileDock =
+    !popoutPosture &&
     !operatorPage &&
     !isMobile &&
     !!windowParam &&
     !selectionBroadcastKeys &&
-    layout.order.includes("tty");
+    leaves(renderLayout).includes("tty");
   const composeStripElement = (
     <ComposeStrip
       // The operator page's footer input is forced on regardless of the
@@ -4077,13 +4397,15 @@ function AppShell() {
       // in-tile the tile frame already names the target. One shared element
       // serves both docks, so the prop simply tracks the dock predicate.
       dockedInTile={inTileDock}
-      // Focus-memory write gate: the terminal route's window identity. The
-      // strip records `compose` only when its live target IS this window —
-      // the focused-terminal context lags a window switch by a commit, and a
-      // restore-driven focus in that gap would otherwise cross-write the
-      // previous window's key.
+      // Focus-memory write gate: the terminal route's tile-window identity.
+      // The strip records `compose` only when its live target IS the focused
+      // tile's window — a foreign tty tile's home window counts (the focused
+      // terminal registers with it), so composing into a borrowed terminal
+      // records under the tile's own window key. The focused-terminal context
+      // lags a window switch by a commit, and a restore-driven focus in that
+      // gap would otherwise cross-write the previous window's key.
       focusMemoryWindow={
-        windowParam ? { server, windowId: windowParam } : undefined
+        focusedTileWindowId ? { server, windowId: focusedTileWindowId } : undefined
       }
       selectionTarget={
         selectionBroadcastKeys
@@ -4176,25 +4498,63 @@ function AppShell() {
           ? buildTileSwitchActions(panelSurfaces, mobileActiveTile, switchToTile, switchTargetDisabled)
           : []
         : buildViewActions(currentViews, resolvedView, switchView)),
-      // Layout entries (260812-ab5v R11, T012) — Constitution V palette parity
+      // Layout entries — Constitution V palette parity
       // for the surface toggles, tile verbs, and ▦ chip: `Tile: Show/Hide
       // <Surface>` (the top-bar toggle group's actions), `Layout: Expand`/`Restore` (the
-      // transient slot-A zoom), `Layout: Promote/Swap <Surface>` (the tile
-      // verbs), per-shape jumps for the current arity, and `Layout: Cycle
-      // Shape` (the `layout-cycle` chord's body — its id IS the registry
+      // transient focused-leaf zoom), `Layout: Promote <Surface>` (swap with
+      // slot A), template jumps for the current tile count, `Layout: Cycle
+      // Template` (the `layout-cycle` chord's body — its id IS the registry
       // actionId, so `withShortcutHints` decorates it with the effective ⌘;
-      // combo). These REPLACE the retired `Panel: Web`/`Panel: Code` entries —
-      // the layout model subsumes the panel. The gating + labels live in the
-      // pure `buildLayoutActions` (lib/palette/layout.ts), the
-      // `buildViewActions` precedent. The `code-toggle` chord (⌘2 /
+      // combo), and the directional `Tile: Swap …` rows for the focused leaf
+      // (desktop multi-tile only — the swap needs the leaves' real rects from
+      // the layoutRects seam). These REPLACE the retired `Panel: Web`/`Panel:
+      // Code` entries — the layout model subsumes the panel. The gating +
+      // labels live in the pure `buildLayoutActions` (lib/palette/layout.ts),
+      // the `buildViewActions` precedent. The `code-toggle` chord (⌘2 /
       // ⇧Ctrl+2) is documented via the code surface's Show/Hide entry hint
       // (the `toggleTarget`/`toggleShortcut` seam; enabled-else-undefined).
       ...(windowParam
         ? buildLayoutActions(layout, panelSurfaces, {
             zoomed: layoutZoomed,
-            zoomEnabled: !isMobile && layout.order.length > 1,
+            zoomEnabled: !isMobile && leaves(layout).length > 1,
             onApply: applyLayout,
             onZoomToggle: () => layoutZoomToggleRef.current?.(),
+            // Template jumps + the cycle chord body (⌘;).
+            onApplyTemplate: (name: TemplateName) => {
+              const next = applyTemplate(layout, name);
+              if (next) applyLayout(next);
+            },
+            onCycleTemplate: () => {
+              const next = cycleTemplate(layout);
+              if (next !== layout) applyLayout(next);
+            },
+            // The tile verbs' palette twins, by leaf id.
+            onPromoteLeaf: (leafId: string) => {
+              const next = promote(layout, leafId);
+              if (next !== layout) applyLayout(next);
+            },
+            // Directional swap of the FOCUSED leaf with its geometric
+            // neighbour, resolved against the leaves' live rects.
+            onSwapDirection: (direction: SwapDirection) => {
+              if (!focusedLeafId) return;
+              const next = swapDirectional(
+                layout,
+                focusedLeafId,
+                direction,
+                layoutRectsRef.current?.() ?? undefined,
+              );
+              if (next !== layout) applyLayout(next);
+            },
+            focusedLeafId,
+            leafRects:
+              !isMobile && leaves(layout).length > 1
+                ? () => layoutRectsRef.current?.() ?? new Map<string, Rect>()
+                : undefined,
+            // The viewer's stored divider sizes for the current structure —
+            // the Show/Bring floor check estimates candidate rects from them.
+            layoutSizes: windowParam
+              ? () => readStoredSizes(server, windowParam, layout)
+              : undefined,
             // `Tile: Focus <Surface>` (260812-wfic R10) — keyboard parity
             // for click-to-focus; desktop only (mobile's switcher is the
             // top-bar switch group), routed through SurfaceLayout's focus seam.
@@ -4215,6 +4575,35 @@ function AppShell() {
                 return b?.enabled ? formatCombo(b, bindingHost.platform) : "";
               })(),
             },
+            // `Tile: Bring … here` / `Tile: Send Back to …` — the borrow and
+            // return write seams; the builder gates candidates on the floor.
+            bringWindows,
+            onBring: borrowInto,
+            onSendBack: (leafAddr: string) => {
+              if (windowParam) sendHome(windowParam, leafAddr);
+            },
+            windowNameFor: (windowId: string) => windowsById.get(windowId)?.name,
+            // `Tile: Bring Back <Surface>` — the home tab's half of the
+            // return verb (the placeholder's bring back, palette form); the
+            // write is the same sendHome return.
+            awayIn: effectiveWindow?.awayIn,
+            routeWindowId: windowParam,
+            onBringBack: sendHome,
+            // `Tile: Pop Out <Surface>` / `Tile: Pop Back In <Surface>` — the
+            // popout verbs (Constitution V parity for the tile header's Pop
+            // out button). Pop Out rides the same body as the header verb (no
+            // measured rect here → the popup's fallback size); the desktop
+            // shell and mobile gate at the caller (the shell's window.open
+            // goes to the system browser, which shares neither localStorage
+            // nor the BroadcastChannel with the opener). Every mutation above
+            // keeps computing from the FULL shared tree while tiles are
+            // popped — only this viewer's render is reduced.
+            poppedIds: popped,
+            onPopOut:
+              !isMobile && !isShell()
+                ? (leafId: string) => popOut(leafId, layoutRectsRef.current?.().get(leafId))
+                : undefined,
+            onPopIn: popIn,
           })
         : []),
       // `View: Enter/Exit Zen Mode` (260820-o8cr R7) — the `zen-toggle`
@@ -4245,7 +4634,7 @@ function AppShell() {
       // factors (mobile renders no tile header).
       ...(windowParam
         ? buildCodeActions({
-            codeTileOpen: layout.order.includes("code"),
+            codeTileOpen: leaves(layout).includes("code"),
             followTarget: codeRootFollowTarget(effectiveWindow),
             frameMounted: (codeServer?.reachable ?? false) && codeSrc !== null,
             onFollowTerminal: () => codeCommandsRef.current?.followTerminal(),
@@ -4277,7 +4666,7 @@ function AppShell() {
       // combo for free; the body dispatches the `terminal-find:open`
       // CustomEvent the chord's gated handler resolves to — one seam for all
       // three entry points, SurfaceLayout its single receiver.
-      ...(windowParam && layout.order.includes("tty")
+      ...(windowParam && leaves(layout).includes("tty")
         ? [
             {
               id: "terminal-find",
@@ -4295,7 +4684,7 @@ function AppShell() {
       // one seam for all entry points. CONTENT-gated on hasWebUrl
       // (260821-zqlq): an onboarding tile has no searchable content, so the
       // entry is absent there (not disabled — the availability idiom).
-      ...(windowParam && layout.order.includes("web")
+      ...(windowParam && leaves(layout).includes("web")
         ? [
             // Onboarding gate (260821-zqlq): the web tile is now always
             // open-able, so find is gated on CONTENT (hasWebUrl), not tile
@@ -4375,7 +4764,7 @@ function AppShell() {
       // the single receiver (the `web-find:open` precedent — one terminal
       // route mount). No shortcut hints — no bindings exist (intake: menu +
       // palette only).
-      ...(windowParam && layout.order.includes("tty")
+      ...(windowParam && leaves(layout).includes("tty")
         ? (
             [
               ["terminal-export-snapshot", "Terminal: Download snapshot (HTML)", "snapshot"],
@@ -4396,7 +4785,7 @@ function AppShell() {
           }))
         : []),
     ],
-    [sessionName, fixedWidth, toggleFixedWidth, toggleComposeStrip, composeStripEnabled, currentViews, resolvedView, switchView, bindingByAction, bindingHost, windowParam, isMobile, layout, panelSurfaces, applyLayout, layoutZoomed, focusedTileKind, mobileActiveTile, switchToTile, switchTargetDisabled, currentAltScreen, zenOn, toggleZen, server, effectiveWindow, addToast, codeServer, codeSrc],
+    [sessionName, fixedWidth, toggleFixedWidth, toggleComposeStrip, composeStripEnabled, currentViews, resolvedView, switchView, bindingByAction, bindingHost, windowParam, isMobile, layout, panelSurfaces, applyLayout, layoutZoomed, focusedTileKind, focusedLeafId, mobileActiveTile, switchToTile, switchTargetDisabled, currentAltScreen, zenOn, toggleZen, server, effectiveWindow, addToast, codeServer, codeSrc, bringWindows, borrowInto, sendHome, windowsById, popped, popOut, popIn],
   );
 
   // Navigation actions (`Go: Back` / `Go: Forward` / ancestor entries,
@@ -4671,8 +5060,8 @@ function AppShell() {
     [nativeEngineEnabled, setNativeEngineEnabled],
   );
 
-  // `Web: Inspect page` (Constitution V — the palette is the keyboard path;
-  // deliberately no chord and no header verb): opens DevTools on the active
+  // `Web: Inspect page` (Constitution V — the palette is the keyboard path
+  // for the URL bar's Inspect button; deliberately no chord): opens DevTools on the active
   // web tab through the chrome's `web-inspect` document seam. Present only
   // when the NATIVE engine is selected (the iframe engine has no devtools
   // capability) AND the window has web content (the `web-find` content gate —
@@ -4979,16 +5368,22 @@ function AppShell() {
   // groups in their prior relative order (R11).
   const paletteActions: PaletteAction[] = useMemo(
     () =>
-      // Every registered action with a palette entry renders its EFFECTIVE
-      // combo as the `shortcut` hint (actionId doubles as the palette id),
-      // formatted per platform and reflecting overrides; disabled bindings
-      // (user-disabled or browser-reserved) render no hint (260730-g40a).
-      withShortcutHints(
-        [...sessionActions, ...sessionsScopeActions, ...windowActions, ...reopenActions, ...windowCycleActions, ...sessionJumpActions, ...boardActions, ...selectionActions, ...viewActions, ...guiActions, ...openActions, ...themeActions, ...configActions, ...statusRefreshActions, ...serverActions, ...shellServerActions, ...webEngineActions, ...webInspectActions, ...pushActions, ...windowSwitchActions, ...agentActions, ...agentSpawnActions, ...operatorComposeActions, ...cronActions, ...buildDataTableActions(mountedDataTables), ...macroPaletteActions],
-        bindingByAction,
-        bindingHost.platform,
-      ),
-    [sessionActions, sessionsScopeActions, windowActions, reopenActions, windowCycleActions, sessionJumpActions, boardActions, selectionActions, viewActions, guiActions, openActions, themeActions, configActions, statusRefreshActions, serverActions, shellServerActions, webEngineActions, webInspectActions, pushActions, windowSwitchActions, agentActions, agentSpawnActions, operatorComposeActions, cronActions, mountedDataTables, macroPaletteActions, bindingByAction, bindingHost],
+      // The popout posture is chrome-less (no palette mount, no shared-layout
+      // verbs): registering nothing also disarms every chord whose handler
+      // resolves through these palette bodies (the `layout-cycle` hazard —
+      // ⌘; in a popout must not rewrite the shared layout).
+      popoutPosture
+        ? []
+        : // Every registered action with a palette entry renders its EFFECTIVE
+          // combo as the `shortcut` hint (actionId doubles as the palette id),
+          // formatted per platform and reflecting overrides; disabled bindings
+          // (user-disabled or browser-reserved) render no hint.
+          withShortcutHints(
+            [...sessionActions, ...sessionsScopeActions, ...windowActions, ...reopenActions, ...windowCycleActions, ...sessionJumpActions, ...boardActions, ...selectionActions, ...viewActions, ...guiActions, ...openActions, ...themeActions, ...configActions, ...statusRefreshActions, ...serverActions, ...shellServerActions, ...webEngineActions, ...webInspectActions, ...pushActions, ...windowSwitchActions, ...agentActions, ...agentSpawnActions, ...operatorComposeActions, ...cronActions, ...buildDataTableActions(mountedDataTables), ...macroPaletteActions],
+            bindingByAction,
+            bindingHost.platform,
+          ),
+    [popoutPosture, sessionActions, sessionsScopeActions, windowActions, reopenActions, windowCycleActions, sessionJumpActions, boardActions, selectionActions, viewActions, guiActions, openActions, themeActions, configActions, statusRefreshActions, serverActions, shellServerActions, webEngineActions, webInspectActions, pushActions, windowSwitchActions, agentActions, agentSpawnActions, operatorComposeActions, cronActions, mountedDataTables, macroPaletteActions, bindingByAction, bindingHost],
   );
   // Publish this route's (already shortcut-decorated) list into the
   // palette-actions slot — the single layout-mounted CommandPalette renders
@@ -5071,7 +5466,7 @@ function AppShell() {
         windowParam,
         isMobile,
         panelSurfaces,
-        order: layout.order,
+        order: slotOrder(layout),
         focusedTileKind,
         togglePanel,
         focusTile: (k) => layoutFocusTileRef.current?.(k),
@@ -5199,7 +5594,7 @@ function AppShell() {
           ? () => {
               if (focusedTileKind === "code") {
                 layoutFocusTileRef.current?.("tty");
-              } else if (layout.order.includes("code")) {
+              } else if (leaves(layout).includes("code")) {
                 layoutFocusTileRef.current?.("code");
               } else if (togglePanel("code")) {
                 // Flag only an APPLIED open: a full 3-tile layout refuses the
@@ -5209,10 +5604,10 @@ function AppShell() {
               }
             }
           : undefined,
-      // ⌘; layout-shape cycle (260812-ab5v R9) — the ▦ chip's chord: the next
-      // same-arity preset, order kept. Reuses the `Layout: Cycle Shape`
-      // palette body, whose gating (window route + a non-degenerate arity
-      // ring) gates the chord for free.
+      // ⌘; layout-template cycle — the ▦ chip's chord: the next template for
+      // the current tile count, slot order kept. Reuses the `Layout: Cycle
+      // Template` palette body, whose gating (window route + a non-degenerate
+      // template ring) gates the chord for free.
       "layout-cycle": fromPalette("layout-cycle"),
     };
   }, [paletteActions, paletteGlobals, server, windowParam, macros, sessionName, executeMacro, toggleComposeStrip, composeStripEnabled, addToast, isMobile, panelSurfaces, togglePanel, restoreFocus, bindingByAction, focusedTileKind, layout, toggleZen, guiZoom, handleGuiZoomChange, guiCapture, handleGuiCaptureChange]);
@@ -5353,12 +5748,38 @@ function AppShell() {
   const surfaceDot = useCallback(
     (surface: SurfaceKind) => {
       if (surface === "gui") {
-        return layout.order.includes("gui") ? guiConnected : gui?.reachable === true;
+        return leaves(layout).includes("gui") ? guiConnected : gui?.reachable === true;
       }
       return surface !== "web" || hasWebUrl(effectiveWindow);
     },
-    [effectiveWindow, gui, guiConnected, layout.order],
+    [effectiveWindow, gui, guiConnected, layout],
   );
+  // The toggle group's away marker: a kind the route window's server-derived
+  // `awayIn` names (its slot is live in another tab). Toggling the kind on
+  // re-adds the slot, which renders as the placeholder while away.
+  const surfaceAway = useCallback(
+    (surface: SurfaceKind) => effectiveWindow?.awayIn?.[surface] !== undefined,
+    [effectiveWindow],
+  );
+  // The toggle group's add gate: the per-viewport size floor (an addSurface
+  // dry run over SOME closed surface), not a tile count. Desktop checks the
+  // leaves' real rects through the layoutRects seam; mobile reads the nominal
+  // box. The stored divider sizes thread in so the verdict matches
+  // togglePanel's. Computed per render of the slot — a resize that changes
+  // the verdict repaints with the next layout/SSE render.
+  const canAddTile = useMemo(() => {
+    const closed = panelSurfaces.filter((surface) => !bareLeaves(layout).includes(surface));
+    if (closed.length === 0) return false;
+    return (
+      addSurface(
+        layout,
+        closed[0],
+        isMobile ? undefined : (layoutRectsRef.current?.() ?? undefined),
+        undefined,
+        windowParam ? readStoredSizes(server, windowParam, layout) : undefined,
+      ) !== null
+    );
+  }, [layout, panelSurfaces, isMobile, server, windowParam]);
   const topBarSlot = useMemo(
     () => ({
       sessions,
@@ -5383,8 +5804,10 @@ function AppShell() {
           ? {
               mode: "toggle" as const,
               available: panelSurfaces,
-              open: layout.order,
+              open: openTileKinds(layout),
               onToggle: togglePanel,
+              canAdd: canAddTile,
+              away: surfaceAway,
               showDot: surfaceDot,
             }
           : windowParam && panelSurfaces.length >= 2
@@ -5393,8 +5816,8 @@ function AppShell() {
                 available: panelSurfaces,
                 active: mobileActiveTile,
                 onSwitch: switchToTile,
-                // A not-open surface whose growth is disallowed (3 tiles
-                // already) renders disabled instead of no-oping silently.
+                // A not-open surface whose growth is disallowed (no split
+                // fits the size floor) renders disabled instead of no-oping silently.
                 disabled: switchTargetDisabled,
                 showDot: surfaceDot,
               }
@@ -5413,9 +5836,12 @@ function AppShell() {
         : undefined,
       // ▦ Layout chip machinery (260812-ab5v R9): the on-screen layout + the
       // single mutation path. The top bar's chip/rows jump presets through
-      // `applyLayout` like every other mutation.
+      // `applyLayout` like every other mutation. Disabled while this viewer
+      // has a tile popped out (a template resolved on the reduced render
+      // would strand the popped leaf).
       layout,
       onApplyLayout: applyLayout,
+      layoutTemplatesDisabled: popped.length > 0,
     }),
     [
       sessions,
@@ -5433,6 +5859,8 @@ function AppShell() {
       isMobile,
       panelSurfaces,
       togglePanel,
+      canAddTile,
+      surfaceAway,
       surfaceDot,
       mobileActiveTile,
       switchToTile,
@@ -5443,6 +5871,7 @@ function AppShell() {
       handleGuiToolbarVisibleChange,
       layout,
       applyLayout,
+      popped,
     ],
   );
   useRegisterTopBarSlot(topBarSlot);
@@ -5466,6 +5895,20 @@ function AppShell() {
   if (serverView === "not-found") {
     return <ServerNotFound serverName={server} />;
   }
+
+  // The all-popped placeholder's rows: one per popped leaf still in the
+  // shared tree, foreign leaves disambiguated by their home window's name
+  // (the `Tile: Bring … here` labeling convention).
+  const poppedRows: PoppedLeafRow[] = popped
+    .filter((id) => leafIds(layout).includes(id))
+    .map((id) => {
+      const home = parseLeafAddress(id)?.home;
+      return {
+        leafId: id,
+        kind: zoomLeafKind(id) ?? "tty",
+        homeName: home !== undefined ? (windowsById.get(home)?.name ?? home) : undefined,
+      };
+    });
 
   // Sidebar element — shared between the desktop grid placement and the
   // mobile overlay (the Shell component renders one or the other).
@@ -5494,7 +5937,9 @@ function AppShell() {
 
   return (
     <Shell
-      sidebarChildren={sidebarElement}
+      // The popout posture is chrome-less: no sidebar, no status bar, no
+      // bottom bar / compose strip — one tile fills the window.
+      sidebarChildren={popoutPosture ? null : sidebarElement}
       // Zen mode (260820-o8cr R3): the render-time sidebar hide — Shell
       // composes `sidebarOpen && !zenActive`; the persisted preference is
       // never touched on a zen path.
@@ -5508,6 +5953,7 @@ function AppShell() {
       // the PANE panel is on screen — see `paneRegistersVisible`.
       // Zen keeps the bar VISIBLE and adds its exit affordance there (R5/R8).
       statusBarChildren={
+        popoutPosture ? null : (
         <StatusBar
           window={paneRegistersVisible ? null : currentWindow ?? null}
           server={server}
@@ -5516,6 +5962,7 @@ function AppShell() {
           zenActive={zenOn}
           onExitZen={zenOn ? toggleZen : undefined}
         />
+        )
       }
       // Bottom-bar row: Shell owns the `<footer
       // gridArea:"bottombar">` placement — inside the stage's content column
@@ -5524,6 +5971,7 @@ function AppShell() {
       // relocated to the status bar), so the `auto` row collapses to zero
       // height there (the 260814-ink6 no-reserved-height property).
       bottomBarChildren={
+        popoutPosture ? null : (
         <>
           {composeStripVisible && !inTileDock && composeStripElement}
           <BottomBar
@@ -5531,6 +5979,7 @@ function AppShell() {
             onFocusTerminal={() => focusTerminalRef.current?.()}
           />
         </>
+        )
       }
       sidebarResizing={isDragging}
       sidebarResizeHandle={
@@ -5633,7 +6082,8 @@ function AppShell() {
           {operatorPage && <TerminalActivityTabs clearTongue={isMobile} />}
           {/* Surface-layout column (260812-ab5v-surface-layout-core, spec
               surface-layout.md): the tile grid (SurfaceLayout) renders the
-              RESOLVED layout as 1–3 tiles mounting the existing renderers
+              RESOLVED layout as 1–N tiles (offers gated by the size floor)
+              mounting the existing renderers
               unchanged — it SUBSUMES both the legacy exclusive-lens branch
               (the palette `View:` actions drive `single:<view>` through
               applyLayout — R12) and the right-panel surface mount (the panel
@@ -5645,7 +6095,7 @@ function AppShell() {
               hide-never-unmount posture SurfaceLayout applies to its own
               hidden tiles), so the terminal stream survives the tab swap and
               switching back needs no reconnect. */}
-          <div className={terminalHidden ? "flex-1 min-w-0 min-h-0 flex-col hidden" : "flex-1 min-w-0 min-h-0 flex flex-col"}>
+          <div className={terminalHidden || allPopped ? "flex-1 min-w-0 min-h-0 flex-col hidden" : "flex-1 min-w-0 min-h-0 flex flex-col"}>
           {/* Render gate keys on `windowParam` (the URL's @N) ALONE, not the
               SSE-derived `sessionName`. The session name is only needed for the
               breadcrumb/title and resolves a beat after the first snapshot; the
@@ -5653,6 +6103,11 @@ function AppShell() {
               session would needlessly delay the mount on a cold deep-link (and
               briefly flash the Dashboard). */}
           {windowParam ? (
+            // The ended popout (its surface's window left the payload):
+            // chrome-less, no navigation, the surface unmounted.
+            popoutEnded ? (
+              <PopoutEnded />
+            ) : (
             <SurfaceLayout
               // Keyed by SERVER only: a same-server window switch re-renders
               // the mounted grid with a new `windowId` prop — the tty tile's
@@ -5668,8 +6123,11 @@ function AppShell() {
               key={server}
               // The rendered layout: the payload's `@rk_win_layout` value,
               // overlaid by the optimistic `pendingLayout` while a verb's
-              // POST is in flight.
-              layout={layout}
+              // POST is in flight, REDUCED by this viewer's popped set (the
+              // opener hides popped tiles for itself only) — or the popout's
+              // single-leaf tree in the popout posture. Mutations keep
+              // computing from the full shared tree.
+              layout={renderLayout}
               server={server}
               windowId={windowParam}
               sessionName={sessionName ?? ""}
@@ -5682,15 +6140,50 @@ function AppShell() {
               // The payload's window record: the code tile reads the shared
               // code root (`codeRootFor`), the web tile the active web tab.
               window={effectiveWindow}
-              isMobile={isMobile}
-              // On mobile the top-bar switch group picks which slot renders
+              // The route server's window map — a foreign leaf's tile resolves
+              // its HOME window's record (name, status, code root, web tabs)
+              // from it; the session map feeds the foreign tile's relay
+              // connection identity and focus registration.
+              windowsById={windowsById}
+              sessionNameByWindowId={sessionNameByWindowId}
+              isMobile={
+                // The popout is a desktop-only posture and its window is
+                // sized from the tile's rect — often under the 640px mobile
+                // breakpoint. Force the desktop branch: the mobile branch
+                // renders no tile header, and the header carries the popout's
+                // Pop back in verb.
+                popoutPosture ? false : isMobile
+              }
+              // On mobile the top-bar switch group picks which leaf renders
               // (per-viewer — the zoom key; the layout itself is untouched
-              // for an already-open surface).
-              mobileActiveSlot={layout.order.indexOf(mobileActiveTile)}
+              // for an already-open surface). Reading-order index.
+              mobileActiveSlot={leaves(renderLayout).indexOf(mobileActiveTile)}
               wsRef={wsRef}
               focusRef={focusTerminalRef}
               scrollLocked={scrollLocked}
-              onSessionNotFound={() => navigate({ to: "/$server", params: { server }, replace: true })}
+              onSessionNotFound={
+                // The popout never navigates: a dead stream leaves the ended
+                // state to the payload-driven `popoutEnded` render.
+                popoutPosture
+                  ? () => {}
+                  : () => navigate({ to: "/$server", params: { server }, replace: true })
+              }
+              // Popout posture: the chrome-less single-tile render — the
+              // header's Pop back in verb closes this window (the opener
+              // clears its mark on the `closed` channel message). Opener
+              // posture: this viewer's popped set (hidden tiles, disarmed
+              // header drag, evicted popped code frames) and the header's
+              // Pop out verb (absent in the desktop shell and on mobile —
+              // the shell's window.open goes to the system browser, which
+              // shares neither localStorage nor the channel).
+              popoutLeafId={popoutPosture && popLeaf !== null ? popLeaf.leafId : undefined}
+              onPopBackIn={popoutPosture ? popoutPresence.closeSelf : undefined}
+              popped={popped.length > 0 ? popped : undefined}
+              onPopOut={
+                !isMobile && !isShell()
+                  ? (leafId, rect) => popOut(leafId, rect)
+                  : undefined
+              }
               codeReachable={codeServer?.reachable ?? false}
               // The gui tile: the host signal (content selection), the
               // per-viewer postures, the RFB connection report (the toggle
@@ -5744,19 +6237,40 @@ function AppShell() {
               // being active.
               fetchBridgeStatusFor={fetchBridgeStatusFor}
               shouldReclaimChord={reclaimChordForKind}
-              onPromote={(surface) => applyLayout(promote(layout, surface))}
-              onSwap={(surface) => applyLayout(swapWithNext(layout, surface))}
-              onClose={(surface) => {
-                const next = closeSurface(layout, surface);
+              // Leaf-rect seam: the desktop add/directional-swap verbs read
+              // the leaves' real geometry through this getter.
+              layoutRectsRef={layoutRectsRef}
+              // Tile verbs address their leaf by ID (duplicate tty tiles are
+              // distinct leaves); a disallowed close is null. The header
+              // drag-to-snap commit rides the ONE layout mutation path with
+              // the drop's resolved result tree.
+              onApplyLayout={applyLayout}
+              onClose={(leafId) => {
+                const next = closeSurface(layout, leafId);
                 if (next) applyLayout(next);
               }}
+              // Cross-tab move verbs: the placeholder's bring back (from =
+              // the holder) and the foreign tile header's ↩ (from = the route
+              // window) ride the return endpoint; the placeholder's "go to"
+              // navigates to the holder's route; the sidebar row-drag's drop
+              // rides the borrow helper (plain apply when unheld).
+              onSendHome={sendHome}
+              onGoToWindow={navigateToWindow}
+              onBorrowDrop={borrowInto}
               // tty pane-segment verbs (260813-w1lf): the tile header's
               // Split H / Split V / Close Pane buttons ride the same
-              // optimistic actions the palette split/close entries use.
-              onSplitPane={(horizontal) =>
-                executeSplit(server, windowParam, horizontal, currentWindow?.worktreePath)
+              // optimistic actions the palette split/close entries use,
+              // targeted at the TILE's own window (a foreign tty tile's home)
+              // and that window's worktree.
+              onSplitPane={(horizontal, tileWindowId) =>
+                executeSplit(
+                  server,
+                  tileWindowId,
+                  horizontal,
+                  windowsById.get(tileWindowId)?.worktreePath,
+                )
               }
-              onClosePane={() => executeClosePane(server, windowParam)}
+              onClosePane={(tileWindowId) => executeClosePane(server, tileWindowId)}
               // ⏶ Zoom palette seam (T012/R11): the component owns the
               // transient zoom state and registers its focused-slot toggle
               // here (260819-qwr7 R7); flips report back so the
@@ -5764,10 +6278,16 @@ function AppShell() {
               zoomToggleRef={layoutZoomToggleRef}
               onZoomChange={setLayoutZoomed}
               // Focused tile (260812-wfic R2/R10): the component owns the
-              // focused SLOT and reports the focused KIND for the ttyOnly
-              // chord gate; the palette's `Tile: Focus <Surface>` entries
-              // drive focus through the ref seam.
-              onFocusedKindChange={setReportedFocusedKind}
+              // focused LEAF and reports the focused KIND (the ttyOnly chord
+              // gate) plus the leaf id (the palette's directional swaps); the
+              // palette's `Tile: Focus <Surface>` entries drive focus through
+              // the ref seam.
+              onFocusedKindChange={(kind) =>
+                setReportedFocusedKind({ key: focusWindowKey, kind })
+              }
+              onFocusedLeafChange={(leafId) =>
+                setReportedFocusedLeafId({ key: focusWindowKey, leafId })
+              }
               focusTileRef={layoutFocusTileRef}
               // Steal guard (spec right-panel.md § The code lens): the code
               // tile's iframe-element focus events route here — armed guard +
@@ -5784,6 +6304,7 @@ function AppShell() {
               // theme (the addon requires concrete #RRGGBB colors).
               themePalette={activeTheme.palette}
             />
+            )
           ) : (
             <SessionTiles
               server={server}
@@ -5801,6 +6322,14 @@ function AppShell() {
             />
           )}
           </div>
+          {/* The all-popped placeholder (spec surface-layout.md § Verbs → Pop
+              out): when this viewer has EVERY leaf popped, the reduced tree
+              is empty and a layout never renders empty — the placeholder
+              takes the area while the tiles stay mounted-hidden above (their
+              streams survive). */}
+          {allPopped && windowParam && (
+            <PoppedOutPlaceholder leaves={poppedRows} onPopIn={popIn} />
+          )}
           {/* The non-terminal tabs' content swap: the watchlist / cron body
               takes the slot the SurfaceLayout column vacates (hidden, not
               unmounted, above). The cron tabs pin the stale banner above

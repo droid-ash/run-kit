@@ -70,6 +70,13 @@ type TmuxOps interface {
 	SelectWindowInSession(session, windowID, server string) error
 	ListWindows(ctx context.Context, session, server string) ([]tmux.WindowInfo, error)
 	ResolveWindowSession(ctx context.Context, server, windowID string) (string, error)
+	// EnsureIsoSession returns (creating on demand) the window's single-window
+	// isolated relay session `_rk-iso-<id>` for an `open` op with isolate:true
+	// (see tmux.EnsureIsoSession); SessionClientCount backs the attach-failure
+	// rollback, which kills a freshly ensured iso session only when no other
+	// isolated viewer is attached to it.
+	EnsureIsoSession(ctx context.Context, server, windowID string) (string, error)
+	SessionClientCount(ctx context.Context, server, session string) (int, error)
 	// ActiveWindowID reads the session's post-select active window id (@N);
 	// handleWindowSelect composes its response body from it, falling back to
 	// the requested id when the read fails.
@@ -91,6 +98,10 @@ type TmuxOps interface {
 	SetWindowOption(ctx context.Context, windowID, server, option, value string) error
 	UnsetWindowOption(ctx context.Context, windowID, server, option string) error
 	SetWindowOptions(ctx context.Context, windowID, server string, ops []tmux.WindowOptionOp) error
+	// SetWindowLayouts writes several windows' @rk_win_layout in ONE
+	// \;-chained invocation — the borrow/return two-tab write (pairs apply in
+	// slice order; the holder's removal comes first).
+	SetWindowLayouts(ctx context.Context, server string, pairs []tmux.WindowLayoutWrite) error
 	// ClearWindowRoleExceptOnServer is the server-scoped @rk_win_role radio clear:
 	// it unsets the role option on every window of the server except
 	// keepWindowID (see tmux.ClearWindowRoleExcept) and returns the cleared
@@ -239,6 +250,13 @@ type Server struct {
 	// air process). In-memory only (Constitution II) — same lifetime as the
 	// SSE version slot.
 	version string
+
+	// layoutWriteMu serializes the borrow/return endpoints' read-modify-write
+	// (api/layout_borrow.go): holder lookup and the live-in-one-place check
+	// run from one fetched window snapshot, so a concurrent request must not
+	// interleave between fetchServerWindows and SetWindowLayouts and commit
+	// from a stale read.
+	layoutWriteMu sync.Mutex
 
 	// Manual status-refresh (POST /api/status/refresh) — the single frequency
 	// choke point for forced refreshes of BOTH PR pollers.
@@ -474,6 +492,12 @@ func (p *prodTmuxOps) ListWindows(ctx context.Context, session, server string) (
 func (p *prodTmuxOps) ResolveWindowSession(ctx context.Context, server, windowID string) (string, error) {
 	return tmux.ResolveWindowSession(ctx, server, windowID)
 }
+func (p *prodTmuxOps) EnsureIsoSession(ctx context.Context, server, windowID string) (string, error) {
+	return tmux.EnsureIsoSession(ctx, server, windowID)
+}
+func (p *prodTmuxOps) SessionClientCount(ctx context.Context, server, session string) (int, error) {
+	return tmux.SessionClientCount(ctx, server, session)
+}
 func (p *prodTmuxOps) ActiveWindowID(ctx context.Context, server, session string) (string, error) {
 	return tmux.ActiveWindowID(ctx, server, session)
 }
@@ -527,6 +551,9 @@ func (p *prodTmuxOps) UnsetWindowOption(ctx context.Context, windowID, server, o
 }
 func (p *prodTmuxOps) SetWindowOptions(ctx context.Context, windowID, server string, ops []tmux.WindowOptionOp) error {
 	return tmux.SetWindowOptions(ctx, windowID, server, ops)
+}
+func (p *prodTmuxOps) SetWindowLayouts(ctx context.Context, server string, pairs []tmux.WindowLayoutWrite) error {
+	return tmux.SetWindowLayouts(ctx, server, pairs)
 }
 func (p *prodTmuxOps) ClearWindowRoleExceptOnServer(ctx context.Context, server, keepWindowID string) ([]string, error) {
 	return tmux.ClearWindowRoleExceptOnServer(ctx, server, keepWindowID)
@@ -907,6 +934,11 @@ func (s *Server) buildRouter() chi.Router {
 	r.Post("/api/windows/{windowId}/move-to-session", s.handleWindowMoveToSession)
 	r.Post("/api/windows/{windowId}/rename", s.handleWindowRename)
 	r.Post("/api/windows/{windowId}/options", s.handleWindowOptions)
+	// Cross-tab layout verbs — a surface is live in one tab; moving it is a
+	// server-recomputed two-window write chained in one tmux invocation. See
+	// api/layout_borrow.go.
+	r.Post("/api/layout/borrow", s.handleLayoutBorrow)
+	r.Post("/api/layout/return", s.handleLayoutReturn)
 	// Web-tab verbs (POST only, §IX) — see api/windows_web.go.
 	r.Post("/api/windows/{windowId}/web", s.handleWindowWebAdd)
 	r.Post("/api/windows/{windowId}/web/{n}/remove", s.handleWindowWebRemove)
@@ -1044,6 +1076,10 @@ func (s *Server) buildRouter() chi.Router {
 	// GUI relay — the raw RFB byte stream of the host desktop over WS (binary
 	// frames only; the backend never listens on TCP itself). See api/gui_ws.go.
 	r.Get("/ws/gui/{id}", s.handleGuiWS)
+
+	// Web-tile tunnel — dials target TCP from this host and pipes bytes over
+	// the socket (Origin-less clients only). See api/tunnel_ws.go.
+	r.Get("/ws/tunnel", s.handleTunnelWS)
 
 	// MCP streamable-HTTP transport — POST (client→server), GET (SSE stream),
 	// DELETE (session end) on ONE path, the single recorded Constitution IX

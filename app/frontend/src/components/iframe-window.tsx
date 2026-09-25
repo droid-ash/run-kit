@@ -117,6 +117,12 @@ interface IframeWindowProps {
    *  its content's title — the `onInteract`/`onFolderNavigated`
    *  callback-seam shape. Absent ⇒ no reporting. */
   onPageMeta?: (meta: { title: string | null }) => void;
+  /** The web keyboard-capture latch (`rk-web-capture`, owned by app.tsx).
+   *  While set the native engine's chord table narrows to the release binding
+   *  (`buildWebChordTable(bindings, true)`); the iframe engine's narrowing
+   *  rides `shouldReclaimChord`. The toggle verb lives in the tile header
+   *  (SurfaceLayout), not this chrome. */
+  webCapture?: boolean;
 }
 
 /** Trailing debounce for persisting gesture-driven zoom — a pinch emits
@@ -206,6 +212,7 @@ export function IframeWindow({
   onInteract,
   shouldReclaimChord,
   onPageMeta,
+  webCapture = false,
 }: IframeWindowProps) {
   // Engine selection: bridge presence × the per-viewer preference (the pure
   // rule shared with the palette entry). canShellWeb() is read per render —
@@ -263,7 +270,12 @@ export function IframeWindow({
   // re-derives the table; the iframe engine ignores the prop — its reclaim
   // runs in-document.
   const { bindings } = useKeybindings();
-  const chordTable = useMemo(() => buildWebChordTable(bindings), [bindings]);
+  // The capture latch narrows the native engine's table to the release chord;
+  // the engine re-uploads on every table change, so a flip takes effect live.
+  const chordTable = useMemo(
+    () => buildWebChordTable(bindings, webCapture),
+    [bindings, webCapture],
+  );
 
   // ── per-frame state (P3: one chrome, N frames) ──────────────────────────
   // Each engine reports its chrome slice up; the map is keyed by URL (the

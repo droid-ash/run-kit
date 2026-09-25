@@ -129,6 +129,13 @@ describe("IframeWindow", () => {
     expect(screen.queryByLabelText("Switch to terminal")).toBeNull();
   });
 
+  // The keyboard-capture verb lives in the tile header (SurfaceLayout), not
+  // the URL bar.
+  it("renders no capture button in the URL bar", () => {
+    renderIframe({ tabs: ["http://localhost:8080/docs"], webCapture: true });
+    expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
+  });
+
   // Find bar (260819-ie2i R5/R7/R8): open seams, counter/navigation, the
   // cross-origin disabled state, and reset-on-load.
   describe("find bar", () => {

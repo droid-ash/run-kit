@@ -84,6 +84,19 @@ describe("CodeSurface", () => {
     expect(queryByTitle("Code editor")).toBeNull();
   });
 
+  it("the not-running state's Restart button calls onRestart and surfaces a failure", async () => {
+    const onRestart = vi.fn().mockRejectedValue(new Error("code-server did not come up"));
+    const { getByRole, findByTestId } = render(
+      <CodeSurface gitRoot="/repo" workspaceSrc={null} reachable={false} onRestart={onRestart} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Restart code-server" }));
+    expect(onRestart).toHaveBeenCalledTimes(1);
+    expect(await findByTestId("code-surface-restart-note")).toHaveTextContent(
+      "code-server did not come up",
+    );
+    expect(getByRole("button", { name: "Restart code-server" })).not.toBeDisabled();
+  });
+
   it("renders the pending state (no iframe) while the workspace src is unresolved", () => {
     const { getByTestId, queryByTitle } = render(
       <CodeSurface gitRoot="/repo" workspaceSrc={null} reachable={true} />,

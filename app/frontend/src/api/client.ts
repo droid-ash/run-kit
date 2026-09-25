@@ -714,6 +714,20 @@ export async function restartGui(
   return { ok: true };
 }
 
+/**
+ * POST /api/code-server/restart — the code lens empty state's restart: kill +
+ * re-ensure the daemon-managed code-server (the binary is re-resolved, a
+ * missing one spawns the install job). Resolves the outcome on 200; any
+ * non-ok response throws with the server's error text.
+ */
+export type CodeServerRestartResult = { status: "started" | "installing" | "external" };
+
+export async function restartCodeServer(): Promise<CodeServerRestartResult> {
+  const res = await deduplicatedFetch("/api/code-server/restart", { method: "POST" });
+  if (!res.ok) await throwOnError(res);
+  return res.json();
+}
+
 /** The two launcher roles (spec docs/specs/gui.md § Agent verbs / § Protocol
  *  and relay — the allowlisted `POST /api/gui/{id}/launch` body). */
 export type GuiLaunchApp = "terminal" | "browser";

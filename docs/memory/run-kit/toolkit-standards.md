@@ -216,25 +216,27 @@ fourth surface measured against the same two checks
   not inside tmux, tmux failure) flow through `RunE` to stderr with a non-zero
   exit.
 
-The `rk code-server` group (`install`/`start`/`update` — see
+The `rk code-server` group (`install`/`start`/`restart`/`update` — see
 [cli](/run-kit/architecture/cli.md) § CLI Subcommands, `code-server` row)
 is the fifth surface measured against the same two checks
-(260813-oid2-own-code-server-install):
+(260813-oid2-own-code-server-install) (260924-7koz-code-server-restart):
 
-- **help-dump: platform-stable registration.** The parent and all three
+- **help-dump: platform-stable registration.** The parent and all four
   children are registered unconditionally on `rootCmd` (`root.go`'s `init()`)
   and every node carries a `Long:` block, so the cobra tree walk picks the
   subtree up with no help-dump code change and the dumped contract is
-  identical on every platform — the `start` verb's daemon-running gate and the
-  `update` verb's managed-install gate are operational outcomes at run time,
-  not registration conditions. The help-dump goldens cover the
+  identical on every platform — the `start`/`restart` verbs' daemon-running
+  gate and the `update` verb's managed-install gate are operational outcomes
+  at run time, not registration conditions. The help-dump goldens cover the
   subtree.
 - **Principle 9: outcome lines are data, acquisition narration is chatter.**
   Every verb routes through `newSink(cmd)`, and the `internal/codeserver`
   installer's `Progress` writer is bound to `sink.chatter`, so
   resolve/download/extract progress vanishes under `--quiet` while the outcome
   lines — `install`'s already-current / installed lines, `start`'s
-  already-running / externally-managed / started lines, `update`'s
+  already-running / externally-managed / started lines, `restart`'s
+  `Restarted code-server (rk-code-server session).` / externally-managed /
+  install-job-spawned lines, `update`'s
   not-managed skip and `Updated code-server vX -> vY` line — are `Dataf` on
   stdout and survive: silence there would misreport a no-op as success or hide
   a mutation. The respawn additions (260813-2s4u-respawn-aware-code-server-install)
@@ -249,8 +251,9 @@ is the fifth surface measured against the same two checks
   validators with `usageArgs` in `code_server.go`'s `init()` — root's central
   wrap loop covers only `rootCmd`'s **direct** children (the `desktop` /
   `remote` reason) — so an arg-count violation is a usage error (exit 2),
-  while a down daemon (`start` names `rk serve -d`), a missing binary on
-  `start` (names `rk code-server install`), and download/verify failures are
+  while a down daemon (`start`/`restart` name `rk serve -d`), a missing binary on
+  `start` (names `rk code-server install`), a `restart` whose respawn never
+  binds the port (the 15s `codeServerPortUpTimeout` error), and download/verify failures are
   operational (1).
 - **The `rk skill` bundle stays untouched**, for the same reason as
   `desktop`/`remote`/`daemon run`/`role`: the bundle is a capability briefing,

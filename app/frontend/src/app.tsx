@@ -233,7 +233,7 @@ import { LogoSpinner } from "@/components/logo-spinner";
 import type { ServerInfo, SelectWindowResult } from "@/api/client";
 import type { ProjectSession, WindowInfo } from "@/types";
 
-import { selectWindow, createSession, createWindow, splitWindow, closePane, killWindow, moveWindow, moveWindowToSession, reloadTmuxConfig, initTmuxConf, setWindowColor as setWindowColorApi, setWindowMarker as setWindowMarkerApi, setWindowRole, setWindowNote, setWindowOptions, borrowLayout, returnLayout, setSessionColor as setSessionColorApi, setSessionOrder, setServerOrder, setServerColor as setServerColorApi, setServerProtected, sendToWindow, sendOperatorRequest, sendServerOperatorRequest, refreshStatus, isInfraServer, spawnRiff, forkWindow, sortSessionWindows, addWebTab, selectWebTab, removeWebTab, moveWebTab, reopenClosedWindow, dismissClosedWindow, resumeClosedWindow, muteCron, pinCron, deleteCron, postSettings, restartGui, launchGuiApp, getSettingsEntries, fetchGuiStatus, resizeGui, fetchCodeBridge, DAEMON_SERVER, ApiError, HttpError, type SortWindowsBy, type CronEntry } from "@/api/client";
+import { selectWindow, createSession, createWindow, splitWindow, closePane, killWindow, moveWindow, moveWindowToSession, reloadTmuxConfig, initTmuxConf, setWindowColor as setWindowColorApi, setWindowMarker as setWindowMarkerApi, setWindowRole, setWindowNote, setWindowOptions, borrowLayout, returnLayout, setSessionColor as setSessionColorApi, setSessionOrder, setServerOrder, setServerColor as setServerColorApi, setServerProtected, sendToWindow, sendOperatorRequest, sendServerOperatorRequest, refreshStatus, isInfraServer, spawnRiff, forkWindow, sortSessionWindows, addWebTab, selectWebTab, removeWebTab, moveWebTab, reopenClosedWindow, dismissClosedWindow, resumeClosedWindow, muteCron, pinCron, deleteCron, postSettings, restartGui, launchGuiApp, getSettingsEntries, fetchGuiStatus, resizeGui, fetchCodeBridge, restartCodeServer, DAEMON_SERVER, ApiError, HttpError, type SortWindowsBy, type CronEntry } from "@/api/client";
 import { useCronData } from "@/hooks/use-cron";
 import { buildCronActions, type CronActionHandlers } from "@/lib/palette/cron";
 import { buildDataTableActions } from "@/lib/palette/data-table";
@@ -4639,6 +4639,19 @@ function AppShell() {
             frameMounted: (codeServer?.reachable ?? false) && codeSrc !== null,
             onFollowTerminal: () => codeCommandsRef.current?.followTerminal(),
             onReload: () => codeCommandsRef.current?.reload(),
+            // The empty state's Restart button twin — same client call; the
+            // outcome surfaces as a toast since the row runs outside the tile.
+            unreachable: !(codeServer?.reachable ?? false),
+            onRestartServer: () => {
+              restartCodeServer()
+                .then((r) => {
+                  if (r.status === "installing")
+                    addToast("installing code-server — the editor appears when the download finishes");
+                  else if (r.status === "external")
+                    addToast("port already serving an externally managed code-server");
+                })
+                .catch((err: Error) => addToast(err.message || "code-server restart failed", "error"));
+            },
           })
         : []),
       {
@@ -6193,6 +6206,7 @@ function AppShell() {
               onGuiStatsVisibleChange={handleGuiStatsVisibleChange}
               onGuiConnection={setGuiConnected}
               onGuiRestart={restartGui}
+              onCodeServerRestart={restartCodeServer}
               onGuiOpenLogs={openGuiLogs}
               guiCommandsRef={guiCommandsRef}
               // The header toolbar mirrors this exact palette list by row id.

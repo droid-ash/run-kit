@@ -986,6 +986,7 @@ func (s *Server) buildRouter() chi.Router {
 	r.Post("/api/update", s.handleUpdate)
 	r.Post("/api/updates/check", s.handleUpdatesCheck)
 	r.Post("/api/restart", s.handleRestart)
+	r.Post("/api/code-server/restart", s.handleCodeServerRestart)
 
 	// Riff — web-UI agent spawn (POST) + preset list (GET). See api/riff.go.
 	r.Post("/api/riff", s.handleRiffSpawn)

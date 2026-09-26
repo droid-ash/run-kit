@@ -50,7 +50,7 @@ import {
   type TemplateName,
 } from "@/lib/surface-layout";
 import { parseLeafAddress, pruneDeadLeaves } from "@/lib/layout-tree";
-import { parsePopLeaf, reducePopped } from "@/lib/popout";
+import { parsePopLeaf, popoutToggleAction, popoutToggleTarget, reducePopped } from "@/lib/popout";
 import { usePoppedSet, usePopoutPresence } from "@/hooks/use-popout";
 import { focusIsEngaged, hasReclaimableMatch, shouldSuppressChord, withShortcutHints, formatCombo } from "@/lib/keybindings";
 import { requestQuakeTerminal, findOperatorWindow, resolveQuakeServer } from "@/lib/quake-terminal";
@@ -1168,16 +1168,58 @@ function AppShell() {
   // popout window itself — it is not an opener (its sweep would otherwise
   // judge marks against its own presence announcements). The tree argument
   // is the FULL shared tree so marks whose leaf left the layout are pruned.
-  const { popped, popOut, popIn } = usePoppedSet(
+  const { popped, popOut, popIn, focusPopout } = usePoppedSet(
     server,
     windowParam ?? "",
     windowParam != null && !popoutPosture,
     leafIds(layout),
   );
+  // The revealed set (spec surface-layout.md § Verbs → Pop out): the popped
+  // leaf ids THIS viewer asked to see — their slots render the popped
+  // placeholder instead of being hidden. Ephemeral React state keyed per
+  // (server, @N) by the key stamp, never persisted (a reload returns to the
+  // reflowed default). An id leaves the set when its popped mark clears
+  // (pop-in, `closed`, the stale sweep, the tree prune — all flow through
+  // `popped`): the read filters to `popped` so the set is always a subset of
+  // it, and the prune effect drops the cleared ids from the stored state so a
+  // later re-pop of the same leaf never resurrects a reveal.
+  const revealedKey = `${server}:${windowParam ?? ""}`;
+  const [revealedState, setRevealedState] = useState<{ key: string; ids: string[] }>({
+    key: revealedKey,
+    ids: [],
+  });
+  const revealed = useMemo(
+    () =>
+      revealedState.key === revealedKey
+        ? revealedState.ids.filter((id) => popped.includes(id))
+        : [],
+    [revealedState, revealedKey, popped],
+  );
+  useEffect(() => {
+    setRevealedState((prev) => {
+      // A window switch resets the set outright (per (server, @N) state).
+      if (prev.key !== revealedKey) {
+        return { key: revealedKey, ids: [] };
+      }
+      return prev.ids.some((id) => !popped.includes(id))
+        ? { key: prev.key, ids: prev.ids.filter((id) => popped.includes(id)) }
+        : prev;
+    });
+  }, [revealedKey, popped]);
+  // The popped placeholder's ✕: removes the leaf from the revealed set only —
+  // never a layout close.
+  const hideRevealedPopped = useCallback((leafId: string) => {
+    setRevealedState((prev) => ({
+      key: prev.key,
+      ids: prev.ids.filter((id) => id !== leafId),
+    }));
+  }, []);
   // The tree SurfaceLayout RENDERS: the popout's single leaf in the popout
   // posture (keyed to the URL, never the shared layout — the popout keeps
   // rendering its surface while the surface's window lives, even if the leaf
-  // leaves `@rk_win_layout`); the reduced tree in the opener posture; the
+  // leaves `@rk_win_layout`); the reduced tree in the opener posture (popped
+  // minus revealed — a revealed leaf stays in the tree and renders the popped
+  // placeholder in its slot); the
   // full tree otherwise (and under the all-popped placeholder, where every
   // tile renders hidden through the `popped` prop so their streams survive).
   // Every shared-layout MUTATION below still computes from the full `layout`.
@@ -1188,10 +1230,12 @@ function AppShell() {
         : null,
     [popLeaf],
   );
-  const reducedLayout = useMemo<{ tree: Layout | null; present: string[] }>(
-    () => (popped.length > 0 ? reducePopped(layout, popped) : { tree: layout, present: [] }),
-    [layout, popped],
-  );
+  const reducedLayout = useMemo<{ tree: Layout | null; present: string[] }>(() => {
+    if (popped.length === 0) return { tree: layout, present: [] };
+    const hidden =
+      revealed.length > 0 ? popped.filter((id) => !revealed.includes(id)) : popped;
+    return hidden.length > 0 ? reducePopped(layout, hidden) : { tree: layout, present: [] };
+  }, [layout, popped, revealed]);
   const allPopped = popped.length > 0 && reducedLayout.tree === null;
   const renderLayout: Layout =
     popoutPosture && popTree !== null
@@ -2103,9 +2147,28 @@ function AppShell() {
   // depends on it). Stable
   // across SSE ticks. Shared by the top-bar surface-toggle group, the tile
   // verbs, and the palette. Defined BELOW the focusedLeafId mirror — the
-  // deps array needs it.
+  // deps array needs it. The popped guard comes first: when the kind's
+  // close target — its first bare leaf — is in this viewer's popped set, the
+  // toggle NEVER writes the shared layout; it flips the leaf's membership in
+  // the revealed set (reveal shows the popped placeholder, hide returns to
+  // the reflowed render), reporting true on reveal / false on hide so
+  // focus-hop's open-then-focus flag stays truthful.
   const togglePanel = useCallback(
     (surface: SurfaceName) => {
+      const action = popoutToggleAction(layout, surface, popped, revealed);
+      if (action !== null) {
+        setRevealedState((prev) => {
+          const ids = prev.key === revealedKey ? prev.ids : [];
+          return {
+            key: revealedKey,
+            ids:
+              action.kind === "reveal"
+                ? [...ids, action.leafId]
+                : ids.filter((id) => id !== action.leafId),
+          };
+        });
+        return action.kind === "reveal";
+      }
       const next = toggleSurface(
         layout,
         surface,
@@ -2116,7 +2179,7 @@ function AppShell() {
       if (next) applyLayout(next);
       return next !== null;
     },
-    [layout, applyLayout, isMobile, focusedLeafId, server, windowParam],
+    [layout, popped, revealed, revealedKey, applyLayout, isMobile, focusedLeafId, server, windowParam],
   );
 
   // The focused tile's OWN window (a foreign leaf's home, the route window
@@ -2134,17 +2197,19 @@ function AppShell() {
 
   // Open-then-focus landing flag: when a chord (focus-hop, or a tile chord's
   // hidden arm) opened a CLOSED tile, this per-kind flag makes the effect
-  // below focus it once the tile lands in the layout (SurfaceLayout's
+  // below focus it once the tile lands in the RENDERED tree (SurfaceLayout's
   // focusTileRef closure re-registers with the new tree — child effects run
-  // before this parent one).
+  // before this parent one). The trigger reads the rendered tree, not the
+  // shared layout: a popped leaf's reveal writes no layout — the tile lands
+  // when the reveal re-adds it to the render.
   const focusOnLandingRef = useRef<SurfaceKind | null>(null);
   useEffect(() => {
     const kind = focusOnLandingRef.current;
-    if (kind !== null && leaves(layout).includes(kind)) {
+    if (kind !== null && leaves(renderLayout).includes(kind)) {
       focusOnLandingRef.current = null;
       layoutFocusTileRef.current?.(kind);
     }
-  }, [layout]);
+  }, [renderLayout]);
 
   // Focus restore + steal guard (spec right-panel.md § The code lens): a
   // window switch re-renders the server-keyed tile grid and nothing would
@@ -4534,6 +4599,10 @@ function AppShell() {
             zoomed: layoutZoomed,
             zoomEnabled: !isMobile && leaves(layout).length > 1,
             onApply: applyLayout,
+            // Show/Hide delegate to the guarded shared toggle: a popped
+            // close target reveals/hides the popped placeholder instead of
+            // writing the shared layout.
+            onToggleSurface: togglePanel,
             onZoomToggle: () => layoutZoomToggleRef.current?.(),
             // Template jumps + the cycle chord body (⌘;).
             onApplyTemplate: (name: TemplateName) => {
@@ -4617,6 +4686,7 @@ function AppShell() {
             // above keeps computing from the FULL shared tree while tiles are
             // popped — only this viewer's render is reduced.
             poppedIds: popped,
+            revealedIds: revealed,
             onPopOut:
               !isMobile && (!isShell() || canShellPopout())
                 ? (leafId: string) => popOut(leafId, layoutRectsRef.current?.().get(leafId))
@@ -4812,7 +4882,7 @@ function AppShell() {
           }))
         : []),
     ],
-    [sessionName, fixedWidth, toggleFixedWidth, toggleComposeStrip, composeStripEnabled, currentViews, resolvedView, switchView, bindingByAction, bindingHost, windowParam, isMobile, layout, panelSurfaces, applyLayout, layoutZoomed, focusedTileKind, focusedLeafId, mobileActiveTile, switchToTile, switchTargetDisabled, currentAltScreen, zenOn, toggleZen, server, effectiveWindow, addToast, codeServer, codeSrc, bringWindows, borrowInto, sendHome, windowsById, popped, popOut, popIn, webCapture, handleWebCaptureChange],
+    [sessionName, fixedWidth, toggleFixedWidth, toggleComposeStrip, composeStripEnabled, currentViews, resolvedView, switchView, bindingByAction, bindingHost, windowParam, isMobile, layout, panelSurfaces, applyLayout, togglePanel, layoutZoomed, focusedTileKind, focusedLeafId, mobileActiveTile, switchToTile, switchTargetDisabled, currentAltScreen, zenOn, toggleZen, server, effectiveWindow, addToast, codeServer, codeSrc, bringWindows, borrowInto, sendHome, windowsById, popped, revealed, popOut, popIn, webCapture, handleWebCaptureChange],
   );
 
   // Navigation actions (`Go: Back` / `Go: Forward` / ancestor entries,
@@ -5622,13 +5692,16 @@ function AppShell() {
       // focus memory (the recording asymmetry — only in-frame `onInteract`
       // records `code`). A closed-but-available code tile opens first
       // (open-then-focus), focused once the layout lands. Same gate as
-      // code-toggle.
+      // code-toggle. Visibility is judged against the RENDERED tree: a
+      // popped, unrevealed code leaf is absent from it (the shared layout
+      // still holds the leaf), so the hop falls to `togglePanel`, whose
+      // popped guard reveals the placeholder instead of writing the layout.
       "focus-hop":
         windowParam && !isMobile && panelSurfaces.includes("code")
           ? () => {
               if (focusedTileKind === "code") {
                 layoutFocusTileRef.current?.("tty");
-              } else if (leaves(layout).includes("code")) {
+              } else if (leaves(renderLayout).includes("code")) {
                 layoutFocusTileRef.current?.("code");
               } else if (togglePanel("code")) {
                 // Flag only an APPLIED open: a full 3-tile layout refuses the
@@ -5644,7 +5717,7 @@ function AppShell() {
       // template ring) gates the chord for free.
       "layout-cycle": fromPalette("layout-cycle"),
     };
-  }, [paletteActions, paletteGlobals, server, windowParam, macros, sessionName, executeMacro, toggleComposeStrip, composeStripEnabled, addToast, isMobile, panelSurfaces, togglePanel, restoreFocus, bindingByAction, focusedTileKind, layout, toggleZen, guiZoom, handleGuiZoomChange, guiCapture, handleGuiCaptureChange]);
+  }, [paletteActions, paletteGlobals, server, windowParam, macros, sessionName, executeMacro, toggleComposeStrip, composeStripEnabled, addToast, isMobile, panelSurfaces, togglePanel, restoreFocus, bindingByAction, focusedTileKind, layout, renderLayout, toggleZen, guiZoom, handleGuiZoomChange, guiCapture, handleGuiCaptureChange]);
   useKeybindingDispatch(keybindingHandlers);
 
   const displayName = currentWindow?.name ?? windowParam ?? "";
@@ -5795,6 +5868,26 @@ function AppShell() {
     (surface: SurfaceKind) => effectiveWindow?.awayIn?.[surface] !== undefined,
     [effectiveWindow],
   );
+  // The toggle group's popped marker: the kind's close target (its first bare
+  // leaf) is in this viewer's popped set — the toggle reveals/hides the popped
+  // placeholder instead of closing the tile.
+  const surfacePopped = useCallback(
+    (surface: SurfaceKind) => {
+      const target = popoutToggleTarget(layout, surface);
+      return target !== undefined && popped.includes(target);
+    },
+    [layout, popped],
+  );
+  // The toggle group's open state: a popped kind reads open only while
+  // revealed — its slot is on screen (as the popped placeholder) only then.
+  const openToggleKinds = useMemo(
+    () =>
+      openTileKinds(layout).filter((surface) => {
+        const target = popoutToggleTarget(layout, surface);
+        return target === undefined || !popped.includes(target) || revealed.includes(target);
+      }),
+    [layout, popped, revealed],
+  );
   // The toggle group's add gate: the per-viewport size floor (an addSurface
   // dry run over SOME closed surface), not a tile count. Desktop checks the
   // leaves' real rects through the layoutRects seam; mobile reads the nominal
@@ -5838,10 +5931,11 @@ function AppShell() {
           ? {
               mode: "toggle" as const,
               available: panelSurfaces,
-              open: openTileKinds(layout),
+              open: openToggleKinds,
               onToggle: togglePanel,
               canAdd: canAddTile,
               away: surfaceAway,
+              popped: surfacePopped,
               showDot: surfaceDot,
             }
           : windowParam && panelSurfaces.length >= 2
@@ -5895,6 +5989,8 @@ function AppShell() {
       togglePanel,
       canAddTile,
       surfaceAway,
+      surfacePopped,
+      openToggleKinds,
       surfaceDot,
       mobileActiveTile,
       switchToTile,
@@ -6219,6 +6315,14 @@ function AppShell() {
                   ? (leafId, rect) => popOut(leafId, rect)
                   : undefined
               }
+              // The revealed subset of `popped`: those leaves stayed in the
+              // rendered tree (the reduction above kept them) and mount the
+              // popped placeholder — bring back pops in, go to window focuses
+              // the live popout, ✕ hides the placeholder (per viewer only).
+              revealedPoppedIds={revealed.length > 0 ? revealed : undefined}
+              onPopIn={popIn}
+              onFocusPopout={focusPopout}
+              onHidePopped={hideRevealedPopped}
               codeReachable={codeServer?.reachable ?? false}
               // The gui tile: the host signal (content selection), the
               // per-viewer postures, the RFB connection report (the toggle

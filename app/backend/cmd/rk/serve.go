@@ -22,6 +22,7 @@ import (
 	"rk/internal/config"
 	"rk/internal/cron"
 	"rk/internal/daemon"
+	"rk/internal/homemigrate"
 	"rk/internal/mcp"
 	"rk/internal/selfpath"
 	"rk/internal/settings"
@@ -177,6 +178,43 @@ func setupSlog(level slog.Level) *slog.Logger {
 	return logger
 }
 
+// migrateHomes is the homemigrate.Migrate seam for the dev-gate test.
+var migrateHomes = homemigrate.Migrate
+
+// daemonPortBusyFn probes whether something already listens on the resolved
+// daemon port — the migration-deferral guard's seam (tests stub it).
+var daemonPortBusyFn = daemon.PortBusy
+
+// migrateHomesUnlessDev runs the one-time run-kit → hexokit home migration at
+// daemon start — before config.Load and tmux.EnsureConfig read anything — and
+// then re-resolves the tmux managed-conf path: tmux.DefaultConfigPath was
+// fixed at package init, before the migration could publish, so the first
+// post-upgrade boot must re-resolve or EnsureConfig would manage the legacy
+// file. Dev builds (version == "dev": just dev/air and the e2e rigs) skip the
+// migration entirely — a worktree rig shares the developer's real legacy home
+// with the live brew daemon, so a rig must never freeze a stale copy of it
+// for the real upgrade (the same gate reserved.go uses).
+//
+// The publish is also DEFERRED while the daemon port is already bound: that
+// listener is a live daemon (after a brew upgrade, typically the old binary,
+// which runs in the same rk-daemon session) that keeps reading and writing
+// the legacy home — a publish would hide it behind the new home's win in the
+// dual-read rule, and this serve would then lose the bind and exit anyway.
+// `rk daemon restart` stops the old serve before starting the new one, so the
+// normal upgrade path finds the port free. Deferral is safe: the legacy home
+// stays authoritative and the next clean start migrates.
+func migrateHomesUnlessDev() {
+	if version == "dev" {
+		return
+	}
+	if daemonPortBusyFn() {
+		slog.Warn("home migration deferred: the daemon port is already in use — restart the daemon (rk daemon restart) to migrate")
+		return
+	}
+	migrateHomes(slog.Default())
+	tmux.RefreshDefaultConfigPath()
+}
+
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the HTTP server (foreground)",
@@ -187,7 +225,7 @@ Environment variables:
   RK_PORT      Port to bind (default 3000)
 
 Port resolution (lowest to highest): default 3000 < 'port:' in
-~/.config/run-kit/config.yaml < RK_PORT.
+~/.config/hexokit/config.yaml < RK_PORT.
 
 Examples:
   run-kit serve                              # foreground on 127.0.0.1:3000
@@ -196,6 +234,7 @@ Examples:
 To run run-kit as a background daemon, see 'run-kit daemon start' (and the rest of the
 'run-kit daemon' subcommand tree).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		migrateHomesUnlessDev()
 		cfg := config.Load()
 
 		// Three-state managed tmux.conf refresh before starting (daemon start is

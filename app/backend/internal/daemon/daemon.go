@@ -188,6 +188,15 @@ func portInUse(host string, port int) bool {
 	return true
 }
 
+// PortBusy reports whether the resolved daemon RK_HOST:RK_PORT already has a
+// listener — the serve-start home migration's live-daemon guard. Before the
+// migration, config.Load resolves an existing install's virtually pinned
+// port, which is exactly the port a still-running old-binary daemon holds.
+func PortBusy() bool {
+	cfg := config.Load()
+	return portInUse(cfg.Host, cfg.Port)
+}
+
 // guardPortAvailable refuses daemon startup when the configured RK_HOST:RK_PORT
 // already has a listener that is not the daemon itself. Runs AFTER IsRunning()
 // in Start/StartWithBinary so the "daemon already running" path takes priority.
@@ -202,7 +211,7 @@ func guardPortAvailable() error {
 	return fmt.Errorf(
 		"something is already serving on %s:%d, but not under the rk-daemon tmux session "+
 			"(likely a foreground `rk serve`, or another process holding the port). "+
-			"Stop it first, or set a different port (port: in ~/.config/run-kit/config.yaml, or RK_PORT).",
+			"Stop it first, or set a different port (port: in ~/.config/hexokit/config.yaml, or RK_PORT).",
 		probeHost(cfg.Host), cfg.Port,
 	)
 }

@@ -26,8 +26,7 @@ fallback in `/install` — see the R1 row).
 
 **Status (2026-09-29)**: **Phase 3 Done** — X3 closed the last row
 ([hexokit#1063](https://github.com/sahil87/hexokit/pull/1063), fab change `zuov`). **A3 (announce hexokit.com) is still open**: no code, Sahil's call.
-X3 also found Brand-tier surfaces no row covered — now rows **F1–F7
-(Phase 4)**; F1 + F2 land before A3. History: **everything before Phase 3 is done except the
+X3 also found Brand-tier surfaces no row covered — now Phase 4 rows **T1–T2**. History: **everything before Phase 3 is done except the
 announce.** A1 (shll v0.1.33) and A2 done; P1, P2, P3 merged and shipped in
 rk v3.20.20. A3 (announce hexokit.com) is Sahil's call. **Phase 3 in
 progress**: R0 **merged** 2026-09-26 ([run-kit#950](https://github.com/sahil87/run-kit/pull/950),
@@ -101,7 +100,7 @@ narrates). Fixed and merged as
 [hexokit#1061](https://github.com/sahil87/hexokit/pull/1061), shipped in
 release **v3.20.23**.
 
-**Open follow-ups from R2 — now rows F5 and F6 (Phase 4)**:
+**Open follow-ups from R2 — now Phase 4 rows T1 and T2**:
 - hexokit-site's `versions.json` `run-kit` key can now be flipped to `hexokit`
   in a small follow-up change — the updatecheck.go fix above makes run-kit
   recognize a `hexokit`-keyed row, which was the blocker. Not done in R2.
@@ -111,26 +110,20 @@ release **v3.20.23**.
   `global-chrome.tsx`/`row-flyout-card.tsx`, and docs/site back-links.
   Surfaced as a candidate follow-up, not filed.
 
-### Phase 4 — brand-tier follow-ups found by X3 (added 2026-09-29)
+### Phase 4 — brand-tier follow-ups (added 2026-09-29; consolidated to two tasks)
 
-X3 found Brand-tier surfaces (the master plan's Naming tiers table marks them
-**Rename**) that no earlier row covered. **F1 and F2 land before A3** — they
-are what a new user sees on day one. F3 and F4 are internal and can follow the
-announce. Every row works from `main`; the substrate rule (D2) still binds:
-no `rk`, `RK_*`, `@rk_*`, `rk-*`, `rk.*` settings key, or Go module rename.
+The unfiled follow-ups from X3, R1 and R2, consolidated at Sahil's request
+(2026-09-29) from seven rows (F1–F7) into two, split by repo rather than by
+announce timing. The announce (A3) is treated as done. Every row works from
+`main`; D2 still binds: no `rk`, `RK_*`, `@rk_*`, `rk-*`, `rk.*` settings key,
+or Go module rename.
 
-| # | Repo | Slug (suggested) | Depends on | Size | Scope | PR | Status |
-|---|------|------------------|-----------|------|-------|----|--------|
-| F1 | hexokit | `hexokit-web-ui-strings` | — | S | Every user-visible `RunKit` string in the web UI → `HexoKit`: top-bar + sidebar wordmark and its `aria-label="RunKit home"` (e2e selectors key on it — update them in the same change), `document.title` (`use-browser-title.ts`), PWA `manifest.json` `name`/`short_name`, notification default titles (`sw.js`, `lib/push.ts`, `lib/shell-notifications.ts`, `hooks/use-push-subscription.ts`), the overflow-menu / sidebar-footer version row (`RunKit v{version}`). Memory and `docs/specs/design.md` move with the code. If the wordmark appears in `/__controls`, regenerate the control-gallery baselines and review the PNG diff. Already-installed PWAs may keep the old name until reinstalled; acceptable | | not started |
-| F2 | hexokit | `hexokit-install-doc` | — | XS | `docs/site/install.md`: every command example `run-kit …` → `rk …` (D2: docs use `rk`), and the bootstrap `sh -s -- run-kit` → `sh -s -- hexokit` (the roster name since R1(c)). Verify whether the old `run-kit` arg is still accepted by the install script and say so in the doc if it is. Check the other `docs/site/` pages for the same pattern while there | | not started |
-| F3 | hexokit | `hexokit-package-names` | A3 (or any time) | XS | Private npm names `run-kit-frontend` / `run-kit-desktop` → `hexokit-frontend` / `hexokit-desktop`; code-bridge `displayName` "run-kit Code Bridge" → "HexoKit Code Bridge" and the palette `category` "run-kit" → "HexoKit". **Keep `publisher: run-kit` and `name: rk-code-bridge`** — together they form the installed extension ID `run-kit.rk-code-bridge`, which `internal/codeserver/extension.go` globs for on disk; changing either installs a second extension beside the old one (same principle as D8's kept `appId`) | | not started |
-| F4 | hexokit | `hexokit-constitution-identity` | A3 (or any time) | XS | Constitution title `# run-kit Constitution` → `# HexoKit Constitution` and its present-tense "run-kit SHALL …" identity prose → HexoKit, as an amendment with a version bump. Principle text naming substrate identifiers (`rk`, `RK_*`, `@rk_*`, `rk-daemon`, `internal/…`) is unchanged | | not started |
-| F5 | hexokit-site | `hexokit-versions-key` | — | XS | Retire the last `versions.json` carry-over (from the R1 and R2 rows): the manifest still keys the product row `run-kit` (checked 2026-09-29). Flip it to `hexokit` — `updatecheck.go` recognises a `hexokit`-keyed row since v3.20.23 (run-kit PR #1061). **Binaries older than v3.20.23 only read the `run-kit` key**, so emit both keys for a transition window rather than a hard flip, unless checking old-binary behaviour shows it is safe | | not started |
-| F6 | hexokit | `hexokit-repo-url-sweep-2` | — | S | The rest of the `sahil87/run-kit` URL sweep from the R2 row (26 live files as of 2026-09-29; GitHub's redirect keeps them working meanwhile): README raw image URLs, `DefaultRepo` in `internal/desktop/desktop.go` (desktop release downloads), `vapidSubscriber` in `internal/push/send.go` (the VAPID `sub` contact claim only; keys and existing subscriptions are unaffected), the frontend doc-link constants in `global-chrome.tsx` / `row-flyout-card.tsx`, and `docs/site/` back-links. Historical text stays (D11) | | not started |
-| F7 | shll → hexokit-site | `install-upgrades-shll` | — | XS | From the R1 row: `scripts/install.sh` should `brew upgrade sahil87/tap/shll` when shll is already installed, before running `shll install`, so a stale shll never drives an install; then drop the stale-shll guard in hexokit-site's install epilogue. Strict order: shll change released first, site guard dropped second | | not started |
+| # | Repo(s) | Slug (suggested) | Depends on | Size | Scope | PR | Status |
+|---|---------|------------------|-----------|------|-------|----|--------|
+| T1 | hexokit | `hexokit-brand-string-sweep` | — | M | **Every remaining Brand-tier `RunKit` / `run-kit` identity string and repo URL in the hexokit repo, one PR** (was F1, F2, F3, F4, F6). **(1) Web UI:** top-bar + sidebar wordmark and its `aria-label="RunKit home"` (update the e2e selectors that key on it in the same change), `document.title` (`use-browser-title.ts`), PWA `manifest.json` `name`/`short_name`, notification default titles (`sw.js`, `lib/push.ts`, `lib/shell-notifications.ts`, `hooks/use-push-subscription.ts`), the overflow-menu / sidebar-footer version row (`RunKit v{version}`); memory and `docs/specs/design.md` move with it; if the wordmark appears in `/__controls`, regenerate the control-gallery baselines and review the PNG diff. **(2) Install doc:** `docs/site/install.md` examples `run-kit …` → `rk …` (D2), bootstrap `sh -s -- run-kit` → `sh -s -- hexokit`; say whether the old arg still works; check other `docs/site/` pages for the pattern. **(3) Package names:** private npm `run-kit-frontend` / `run-kit-desktop` → `hexokit-*`; code-bridge `displayName` → "HexoKit Code Bridge", palette `category` → "HexoKit". **Keep code-bridge `publisher: run-kit` and `name: rk-code-bridge`**: together they are the installed extension ID `run-kit.rk-code-bridge`; rk installs the bundled private `.vsix` into each user's extensions dir, so a renamed ID installs a second extension beside the old one, both contributing the same `rk.*` commands and settings, and `internal/codeserver/extension.go` globs the old ID on disk (same principle as D8's kept `appId`; a real ID migration is separate work, only worth it if the extension is ever published). **(4) Constitution:** title `# run-kit Constitution` → `# HexoKit Constitution` and present-tense "run-kit SHALL …" identity prose → HexoKit, as an amendment with a version bump; substrate identifiers in principle text unchanged. **(5) Repo URL sweep:** the remaining `sahil87/run-kit` URLs (26 live files as of 2026-09-29): README raw image URLs, `DefaultRepo` in `internal/desktop/desktop.go`, `vapidSubscriber` in `internal/push/send.go` (VAPID `sub` contact claim only; keys and subscriptions unaffected), doc-link constants in `global-chrome.tsx` / `row-flyout-card.tsx`, `docs/site/` back-links. Historical text stays (D11) | | not started |
+| T2 | shll → hexokit-site | `install-update-path-cleanup` | — | S | **Install and update path cleanup** (was F7, F5), strict order: **(a) shll:** `scripts/install.sh` runs `brew upgrade sahil87/tap/shll` when shll is already installed, before `shll install`, so a stale shll never drives an install; release shll. **(b) hexokit-site, after (a) is released:** drop the stale-shll guard from the install epilogue, and in the same change add a `hexokit` key to `versions.json` while **keeping the `run-kit` key** (the manifest still keys the product row `run-kit`; `updatecheck.go` reads a `hexokit` row since v3.20.23, run-kit PR #1061, but older binaries only read `run-kit`) | | not started |
 
-Order: (F1 ∥ F2) → A3 → (F3 ∥ F4 ∥ F5 ∥ F6 ∥ F7). F5–F7 were listed as unfiled
-follow-ups inside the R1 and R2 rows; they are tracked here now.
+Order: T1 ∥ T2.
 
 ### Release notes draft (C5 — paste at R1)
 

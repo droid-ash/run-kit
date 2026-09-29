@@ -370,8 +370,29 @@ func TestHas(t *testing.T) {
 	}
 }
 
+// The review kind is a plain registry addition: it parses and round-trips
+// like any other surface, and a second bare review tile is refused.
+func TestReviewSurfaceKind(t *testing.T) {
+	n, err := Parse("h(tty,review)")
+	if err != nil {
+		t.Fatalf("Parse(h(tty,review)): %v", err)
+	}
+	if got := n.String(); got != "h(tty,review)" {
+		t.Errorf("round-trip = %q", got)
+	}
+	if !n.Has("review") {
+		t.Error("Has(review) = false")
+	}
+	if _, err := Add(n, "review"); !errors.Is(err, ErrSurfaceRepeat) {
+		t.Errorf("Add(review) twice: err = %v, want ErrSurfaceRepeat", err)
+	}
+	if _, err := Parse("split-h:tty,review"); err != nil {
+		t.Errorf("legacy Parse(split-h:tty,review): %v", err)
+	}
+}
+
 func TestIsSurface(t *testing.T) {
-	for _, kind := range []string{"tty", "web", "code", "gui"} {
+	for _, kind := range []string{"tty", "web", "code", "gui", "review"} {
 		if !IsSurface(kind) {
 			t.Errorf("IsSurface(%q) = false", kind)
 		}

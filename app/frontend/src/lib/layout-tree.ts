@@ -92,12 +92,12 @@ export const NOMINAL_BOX: Rect = { x: 0, y: 0, w: 1600, h: 1000 };
  * cap keeps a hostile or hand-written deep tree from overflowing the call
  * stack — the parse degrades to `null` (the tty fallback) instead. Sized for
  * foreign address leaves (`@12/tty` runs 7–11 chars): an all-bare tree over
- * the four surface kinds is ≤ 17 chars and legacy presets stay under 30, but
+ * the five surface kinds is ≤ 26 chars and legacy presets stay under 30, but
  * cross-tab trees run longer.
  */
 export const MAX_LAYOUT_LEN = 512;
 
-const SURFACE_KINDS: SurfaceKind[] = ["tty", "web", "code", "gui"];
+const SURFACE_KINDS: SurfaceKind[] = ["tty", "web", "code", "gui", "review"];
 
 function isSurfaceKind(value: string): value is SurfaceKind {
   return (SURFACE_KINDS as string[]).includes(value);
@@ -748,8 +748,8 @@ export const TEMPLATES: Record<TemplateName, (slots: SurfaceKind[]) => LayoutNod
 };
 
 /** Distinct stand-in kinds for structure comparisons and slot mapping (there
- *  are exactly four kinds, and template matching runs at N ≤ 4). */
-const INDEX_KINDS: SurfaceKind[] = ["tty", "web", "code", "gui"];
+ *  are exactly five kinds, and template matching runs at N ≤ 5). */
+const INDEX_KINDS: SurfaceKind[] = ["tty", "web", "code", "gui", "review"];
 
 export interface TemplateMatch {
   name: TemplateName | "single" | "custom";

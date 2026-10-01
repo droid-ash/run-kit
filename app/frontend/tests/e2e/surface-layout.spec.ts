@@ -650,7 +650,8 @@ test.describe("Surface layout — ladder, verbs, history, sizes, mobile", () => 
    * 1. Create a window; navigate; assert the terminal.
    * 2. Click the tty tile header's `Split pane horizontally`; assert the
    *    pane count grows to 2 and `document.activeElement` is inside `.xterm`.
-   * 3. Type a marker; assert the active pane's capture contains it.
+   * 3. Type `echo rkok$((6*7))` + Enter; assert the active pane's capture
+   *    carries the evaluated `rkok42` output line.
    * 4. Open the `More controls` chevron menu, click `Split vertical`; assert
    *    the pane count grows to 3 and `document.activeElement` is inside
    *    `.xterm` again.
@@ -668,15 +669,18 @@ test.describe("Surface layout — ladder, verbs, history, sizes, mobile", () => 
     await expect.poll(() => paneCount(id), { timeout: 10_000 }).toBe(2);
     await expectActiveElement(page, "xterm");
 
-    const marker = `rk-split-focus-${Date.now()}`;
-    await page.keyboard.type(marker);
+    // Assert on the command's OUTPUT, not the echoed input: the half-width
+    // pane wraps a long prompt + input line, and only the shell evaluating
+    // `$((6*7))` proves the keys reached the new pane's shell.
+    await page.keyboard.type("echo rkok$((6*7))");
+    await page.keyboard.press("Enter");
     await expect
       .poll(
         () =>
-          execFileSync("tmux", ["-L", TMUX_SERVER, "capture-pane", "-p", "-t", id]).toString(),
+          execFileSync("tmux", ["-L", TMUX_SERVER, "capture-pane", "-p", "-J", "-t", id]).toString(),
         { timeout: 10_000 },
       )
-      .toContain(marker);
+      .toMatch(/^rkok42$/m);
 
     await page.getByRole("banner").getByRole("button", { name: "More controls" }).click();
     await page
